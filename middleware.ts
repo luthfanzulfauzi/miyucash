@@ -29,8 +29,9 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith('/reset-password')
 
   const isJoinPage = request.nextUrl.pathname.startsWith('/join')
+  const isPingRoute = request.nextUrl.pathname === '/api/ping'
 
-  if (!user && !isAuthPage && !isJoinPage) {
+  if (!user && !isAuthPage && !isJoinPage && !isPingRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
