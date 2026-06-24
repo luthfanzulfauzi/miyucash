@@ -10,14 +10,17 @@ import {
   Loader2,
   ChevronRight,
   PiggyBank,
+  Download,
 } from 'lucide-react'
 import { createClient as _createClient } from '@/lib/supabase/client'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const createClient = _createClient as unknown as () => any
+import { toast } from 'sonner'
 import { useTrackerStore } from '@/stores/tracker'
 import { PixelCat } from '@/components/shared/pixel-cat'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { Cycle } from '@/types'
+import type { CycleExportData } from '@/lib/export/xlsx'
 
 interface CycleWithSummary extends Cycle {
   totalBudget: number
@@ -35,6 +38,7 @@ export default function CyclesPage() {
   const { trackerId } = useTrackerStore()
   const [cycles, setCycles] = useState<CycleWithSummary[]>([])
   const [loading, setLoading] = useState(true)
+  const [exporting, setExporting] = useState<string | null>(null)
 
   const loadCycles = useCallback(async () => {
     if (!trackerId) return
@@ -80,6 +84,88 @@ export default function CyclesPage() {
       setLoading(false)
     }
   }, [trackerId])
+
+  async function exportCycle(cycle: CycleWithSummary) {
+    if (!trackerId || exporting) return
+    setExporting(cycle.id)
+    try {
+      const supabase = createClient()
+
+      // Fetch transactions in cycle period with joins
+      const { data: txns } = await supabase
+        .from('transactions')
+        .select(`
+          date, type, amount, note,
+          account:accounts!transactions_account_id_fkey(name),
+          to_account:accounts!transactions_to_account_id_fkey(name),
+          category:categories(name),
+          creator:users!transactions_created_by_fkey(name)
+        `)
+        .eq('tracker_id', trackerId)
+        .gte('date', cycle.start_date)
+        .lte('date', cycle.end_date)
+        .order('date', { ascending: true })
+
+      // Fetch budgets for this cycle
+      const { data: budgets } = await supabase
+        .from('budgets')
+        .select('amount, category:categories(name)')
+        .eq('cycle_id', cycle.id)
+
+      // Compute per-category spending from transactions
+      type TxnRow = {
+        date: string; type: string; amount: number; note: string | null
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        account: any; to_account: any; category: any; creator: any
+      }
+
+      const txnRows = (txns ?? []) as TxnRow[]
+      const spendingByCategory: Record<string, number> = {}
+      txnRows.forEach((t) => {
+        if (t.type === 'expense' && t.category?.name) {
+          spendingByCategory[t.category.name] = (spendingByCategory[t.category.name] ?? 0) + Number(t.amount)
+        }
+      })
+
+      const totalIncome = txnRows.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0)
+      const totalExpense = txnRows.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const budgetRows = ((budgets ?? []) as any[]).map((b) => ({
+        category_name: b.category?.name ?? 'Tanpa Kategori',
+        budget_amount: Number(b.amount),
+        spent_amount: spendingByCategory[b.category?.name] ?? 0,
+      }))
+
+      const exportData: CycleExportData = {
+        cycleName: cycle.name,
+        startDate: cycle.start_date,
+        endDate: cycle.end_date,
+        isActive: cycle.is_active,
+        totalBudget: cycle.totalBudget,
+        totalIncome,
+        totalExpense,
+        transactions: txnRows.map((t) => ({
+          date: t.date,
+          type: t.type,
+          amount: Number(t.amount),
+          note: t.note,
+          account_name: t.account?.name ?? '-',
+          to_account_name: t.to_account?.name ?? null,
+          category_name: t.category?.name ?? null,
+          created_by_name: t.creator?.name ?? null,
+        })),
+        budgets: budgetRows,
+      }
+
+      const { exportCycleXLSX } = await import('@/lib/export/xlsx')
+      await exportCycleXLSX(exportData)
+    } catch {
+      toast.error('Gagal mengekspor. Coba lagi.')
+    } finally {
+      setExporting(null)
+    }
+  }
 
   useEffect(() => {
     loadCycles()
@@ -215,15 +301,34 @@ export default function CyclesPage() {
                       {cycle.name}
                     </h2>
                   </div>
-                  {cycle.is_active && (
-                    <Link
-                      href="/budget"
-                      className="flex-shrink-0 flex items-center gap-1 text-xs font-semibold text-[#4A7B9D]"
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {cycle.is_active && (
+                      <Link
+                        href="/budget"
+                        className="flex items-center gap-1 text-xs font-semibold text-[#4A7B9D]"
+                      >
+                        Kelola
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </Link>
+                    )}
+                    <button
+                      onClick={() => exportCycle(cycle)}
+                      disabled={exporting === cycle.id}
+                      title="Export XLSX"
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95"
+                      style={{
+                        background: exporting === cycle.id ? 'rgba(184,212,232,0.2)' : 'rgba(184,212,232,0.35)',
+                        color: '#4A7B9D',
+                      }}
                     >
-                      Kelola
-                      <ChevronRight className="h-3.5 w-3.5" />
-                    </Link>
-                  )}
+                      {exporting === cycle.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Download className="h-3.5 w-3.5" />
+                      )}
+                      <span className="hidden sm:inline">Export</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Date range */}
