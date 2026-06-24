@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -19,6 +20,8 @@ import {
   CalendarDays,
   ChevronLeft,
   Share2,
+  Trash2,
+  LogOut,
 } from 'lucide-react'
 import Link from 'next/link'
 import { createClient as _createClient } from '@/lib/supabase/client'
@@ -44,6 +47,7 @@ import {
 } from '@/components/ui/form'
 import { formatDate, getInitials } from '@/lib/utils'
 import type { User } from '@/types'
+import { ExportDialog } from '@/components/shared/export-dialog'
 
 interface MemberWithUser {
   tracker_id: string
@@ -78,6 +82,7 @@ function memberColor(idx: number) {
 
 export default function MembersPage() {
   const { trackerId, trackerName: storeTrackerName, currentUser, setTracker } = useTrackerStore()
+  const router = useRouter()
   const [tracker, setTrackerState] = useState<TrackerInfo | null>(null)
   const [members, setMembers] = useState<MemberWithUser[]>([])
   const [loading, setLoading] = useState(true)
@@ -86,6 +91,14 @@ export default function MembersPage() {
   // Tracker name edit
   const [editingTrackerName, setEditingTrackerName] = useState(false)
   const [trackerNameSaving, setTrackerNameSaving] = useState(false)
+
+  // Danger zone
+  const [exportOpen, setExportOpen] = useState(false)
+  const [deleteTrackerOpen, setDeleteTrackerOpen] = useState(false)
+  const [deleteConfirmName, setDeleteConfirmName] = useState('')
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [leaveTrackerOpen, setLeaveTrackerOpen] = useState(false)
+  const [leaveLoading, setLeaveLoading] = useState(false)
 
   const nameForm = useForm<TrackerNameValues>({
     resolver: zodResolver(trackerNameSchema),
@@ -212,6 +225,65 @@ export default function MembersPage() {
     } else {
       navigator.clipboard.writeText(text)
       toast.success('Teks undangan disalin!')
+    }
+  }
+
+  async function routeAfterTrackerChange() {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { router.push('/login'); return }
+    const { data: memberships } = await supabase
+      .from('tracker_members')
+      .select('tracker_id')
+      .eq('user_id', user.id)
+    if (memberships && memberships.length > 0) {
+      router.push('/tracker-select')
+    } else {
+      router.push('/onboarding')
+    }
+  }
+
+  async function leaveTracker() {
+    if (!tracker || !currentUser) return
+    setLeaveLoading(true)
+    try {
+      const supabase = createClient()
+      const { error } = await supabase
+        .from('tracker_members')
+        .delete()
+        .eq('tracker_id', tracker.id)
+        .eq('user_id', currentUser.id)
+      if (error) throw error
+      toast.success('Kamu keluar dari tracker.')
+      await routeAfterTrackerChange()
+    } catch {
+      toast.error('Gagal keluar. Coba lagi.')
+      setLeaveLoading(false)
+    }
+  }
+
+  async function deleteTracker() {
+    if (!tracker || deleteConfirmName !== tracker.name) return
+    setDeleteLoading(true)
+    try {
+      const supabase = createClient()
+      const { data: cycleRows } = await supabase.from('cycles').select('id').eq('tracker_id', tracker.id)
+      const cycleIds = (cycleRows ?? []).map((c: { id: string }) => c.id)
+      if (cycleIds.length > 0) {
+        await supabase.from('budgets').delete().in('cycle_id', cycleIds)
+      }
+      await supabase.from('transactions').delete().eq('tracker_id', tracker.id)
+      await supabase.from('accounts').delete().eq('tracker_id', tracker.id)
+      await supabase.from('categories').delete().eq('tracker_id', tracker.id)
+      await supabase.from('cycles').delete().eq('tracker_id', tracker.id)
+      await supabase.from('tracker_members').delete().eq('tracker_id', tracker.id)
+      const { error } = await supabase.from('trackers').delete().eq('id', tracker.id)
+      if (error) throw error
+      toast.success('Tracker berhasil dihapus.')
+      await routeAfterTrackerChange()
+    } catch {
+      toast.error('Gagal menghapus tracker. Coba lagi.')
+      setDeleteLoading(false)
     }
   }
 
@@ -513,6 +585,52 @@ export default function MembersPage() {
             </div>
           </div>
         )}
+
+        {/* ── Danger zone ── */}
+        <div
+          className="rounded-3xl border overflow-hidden"
+          style={{
+            background: 'rgba(255,255,255,0.78)',
+            backdropFilter: 'blur(12px)',
+            borderColor: 'rgba(242,168,168,0.3)',
+          }}
+        >
+          <div className="px-5 pt-5 pb-5 space-y-3">
+            <p className="text-[10px] font-bold text-[#C0605A] uppercase tracking-wider">
+              Zona Berbahaya
+            </p>
+            {!isOwner && (
+              <button
+                onClick={() => setLeaveTrackerOpen(true)}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl border text-left transition-all active:scale-[0.98]"
+                style={{ background: 'rgba(242,168,168,0.1)', borderColor: 'rgba(242,168,168,0.3)' }}
+              >
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(242,168,168,0.2)' }}>
+                  <LogOut className="h-4 w-4 text-[#C0605A]" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-[#C0605A]">Keluar dari Tracker</p>
+                  <p className="text-xs text-[#9AAAB8] mt-0.5">Hapus tracker ini dari akunmu</p>
+                </div>
+              </button>
+            )}
+            {isOwner && (
+              <button
+                onClick={() => setDeleteTrackerOpen(true)}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl border text-left transition-all active:scale-[0.98]"
+                style={{ background: 'rgba(242,168,168,0.1)', borderColor: 'rgba(242,168,168,0.3)' }}
+              >
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(242,168,168,0.2)' }}>
+                  <Trash2 className="h-4 w-4 text-[#C0605A]" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-[#C0605A]">Hapus Tracker</p>
+                  <p className="text-xs text-[#9AAAB8] mt-0.5">Hapus semua data permanen — tidak bisa dibatalkan</p>
+                </div>
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* ── Kick member dialog ── */}
@@ -617,6 +735,89 @@ export default function MembersPage() {
             >
               {refreshLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
               Perbarui
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── ExportDialog for backup ── */}
+      <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} />
+
+      {/* ── Leave tracker dialog ── */}
+      <Dialog open={leaveTrackerOpen} onOpenChange={(o) => { if (!o) setLeaveTrackerOpen(false) }}>
+        <DialogContent className="rounded-3xl border-0" style={{ background: 'rgba(245,240,232,0.98)', backdropFilter: 'blur(20px)', maxWidth: '88vw' }}>
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(242,168,168,0.2)' }}>
+                <LogOut className="h-5 w-5 text-[#C0605A]" />
+              </div>
+              <DialogTitle className="text-base font-extrabold text-[#3D4A5C]" style={{ fontFamily: 'var(--font-nunito)' }}>
+                Keluar dari Tracker?
+              </DialogTitle>
+            </div>
+            <p className="text-sm text-[#7A8899] leading-relaxed">
+              Tracker <strong className="text-[#3D4A5C]">{tracker?.name}</strong> akan hilang dari akunmu. Data tracker tetap tersimpan untuk anggota lain.
+            </p>
+          </DialogHeader>
+          <DialogFooter className="gap-2 flex-row pt-2">
+            <Button variant="ghost" onClick={() => setLeaveTrackerOpen(false)} className="flex-1 rounded-2xl font-bold text-sm h-11" style={{ background: 'rgba(255,255,255,0.60)', color: '#7A8899' }}>
+              Batal
+            </Button>
+            <Button onClick={leaveTracker} disabled={leaveLoading} className="flex-1 rounded-2xl font-bold text-sm h-11 gap-2" style={{ background: 'rgba(242,168,168,0.85)', color: '#7A2020' }}>
+              {leaveLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
+              Keluar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete tracker dialog ── */}
+      <Dialog open={deleteTrackerOpen} onOpenChange={(o) => { if (!o) { setDeleteTrackerOpen(false); setDeleteConfirmName('') } }}>
+        <DialogContent className="rounded-3xl border-0" style={{ background: 'rgba(245,240,232,0.98)', backdropFilter: 'blur(20px)', maxWidth: '88vw' }}>
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(242,168,168,0.2)' }}>
+                <Trash2 className="h-5 w-5 text-[#C0605A]" />
+              </div>
+              <DialogTitle className="text-base font-extrabold text-[#3D4A5C]" style={{ fontFamily: 'var(--font-nunito)' }}>
+                Hapus Tracker?
+              </DialogTitle>
+            </div>
+            <div className="space-y-3">
+              <p className="text-sm text-[#7A8899] leading-relaxed">
+                Semua data tracker <strong className="text-[#3D4A5C]">{tracker?.name}</strong> akan dihapus permanen, termasuk transaksi, akun, budget, dan kategori.
+              </p>
+              <button
+                onClick={() => setExportOpen(true)}
+                className="w-full flex items-center gap-2 px-3 py-2.5 rounded-2xl border text-left"
+                style={{ background: 'rgba(184,212,232,0.15)', borderColor: 'rgba(184,212,232,0.4)' }}
+              >
+                <AlertTriangle className="h-4 w-4 text-[#4A7B9D] flex-shrink-0" />
+                <span className="text-xs font-semibold text-[#4A7B9D]">Export data dulu sebelum hapus →</span>
+              </button>
+              <div>
+                <p className="text-xs text-[#7A8899] mb-1.5">Ketik <strong className="text-[#3D4A5C]">{tracker?.name}</strong> untuk konfirmasi:</p>
+                <Input
+                  value={deleteConfirmName}
+                  onChange={(e) => setDeleteConfirmName(e.target.value)}
+                  placeholder={tracker?.name ?? ''}
+                  className="h-10 rounded-xl border-[#F2A8A8]/60 bg-white/60 text-sm font-bold text-[#3D4A5C] focus-visible:ring-[#F2A8A8]"
+                />
+              </div>
+            </div>
+          </DialogHeader>
+          <DialogFooter className="gap-2 flex-row pt-2">
+            <Button variant="ghost" onClick={() => { setDeleteTrackerOpen(false); setDeleteConfirmName('') }} className="flex-1 rounded-2xl font-bold text-sm h-11" style={{ background: 'rgba(255,255,255,0.60)', color: '#7A8899' }}>
+              Batal
+            </Button>
+            <Button
+              onClick={deleteTracker}
+              disabled={deleteLoading || deleteConfirmName !== tracker?.name}
+              className="flex-1 rounded-2xl font-bold text-sm h-11 gap-2"
+              style={{ background: deleteConfirmName === tracker?.name ? 'rgba(192,96,90,0.9)' : 'rgba(192,96,90,0.3)', color: deleteConfirmName === tracker?.name ? 'white' : '#9AAAB8' }}
+            >
+              {deleteLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              Hapus Permanen
             </Button>
           </DialogFooter>
         </DialogContent>
