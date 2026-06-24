@@ -6,38 +6,38 @@
 
 @layer base {
   :root {
-    /* MiyuCash Pastel Theme */
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.2 0 0);
-    --card: oklch(0.97 0.01 80);
-    --card-foreground: oklch(0.2 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.2 0 0);
+    /* MiyuCash Pastel Theme — HSL channel values (used as hsl(var(--x))) */
+    --background: 0 0% 100%;
+    --foreground: 215 20% 18%;
+    --card: 33 33% 96%;
+    --card-foreground: 215 20% 18%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 20% 18%;
     /* Primary: biru muda #B8D4E8 */
-    --primary: oklch(0.83 0.04 220);
-    --primary-foreground: oklch(0.2 0 0);
+    --primary: 207 46% 81%;
+    --primary-foreground: 215 20% 18%;
     /* Secondary: lavender #C9B8E8 */
-    --secondary: oklch(0.82 0.05 290);
-    --secondary-foreground: oklch(0.2 0 0);
+    --secondary: 272 47% 81%;
+    --secondary-foreground: 215 20% 18%;
     /* Muted: krem #F5F0E8 */
-    --muted: oklch(0.96 0.01 80);
-    --muted-foreground: oklch(0.55 0 0);
+    --muted: 33 33% 93%;
+    --muted-foreground: 215 10% 40%;
     /* Accent: peach #F2C4A0 */
-    --accent: oklch(0.88 0.06 55);
-    --accent-foreground: oklch(0.2 0 0);
+    --accent: 26 70% 79%;
+    --accent-foreground: 215 20% 18%;
     /* Destructive: merah pastel #F2A8A8 */
-    --destructive: oklch(0.82 0.07 15);
-    --destructive-foreground: oklch(0.2 0 0);
-    --border: oklch(0.91 0.01 80);
-    --input: oklch(0.91 0.01 80);
-    --ring: oklch(0.83 0.04 220);
+    --destructive: 0 65% 79%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 33 20% 88%;
+    --input: 33 20% 88%;
+    --ring: 207 46% 81%;
     --radius: 0.75rem;
     /* Chart colors */
-    --chart-1: oklch(0.83 0.04 220);
-    --chart-2: oklch(0.82 0.05 290);
-    --chart-3: oklch(0.88 0.06 55);
-    --chart-4: oklch(0.82 0.07 150);
-    --chart-5: oklch(0.88 0.07 80);
+    --chart-1: 207 46% 81%;
+    --chart-2: 272 47% 81%;
+    --chart-3: 26 70% 79%;
+    --chart-4: 140 37% 76%;
+    --chart-5: 38 50% 80%;
   }
 
   * {
