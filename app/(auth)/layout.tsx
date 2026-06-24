@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { PixelCat } from '@/components/shared/pixel-cat'
+import Image from 'next/image'
 
 export const metadata: Metadata = {
   title: { absolute: 'MiyuCash' },
@@ -25,15 +25,17 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       {/* Brand header */}
       <div className="flex flex-col items-center gap-3 mb-8 z-10">
         <div className="relative">
-          <div
-            className="w-24 h-24 rounded-3xl flex items-center justify-center shadow-lg"
-            style={{ background: 'linear-gradient(135deg, #B8D4E8 0%, #C9B8E8 100%)' }}
-          >
-            <PixelCat size={64} />
-          </div>
+          <Image
+            src="/icons/icon-192.png"
+            alt="MiyuCash mascot"
+            width={96}
+            height={96}
+            className="rounded-3xl shadow-lg"
+            priority
+          />
           {/* Subtle glow */}
           <div
-            className="absolute inset-0 rounded-3xl blur-xl opacity-50 -z-10"
+            className="absolute inset-0 rounded-3xl blur-xl opacity-40 -z-10"
             style={{ background: 'linear-gradient(135deg, #B8D4E8 0%, #C9B8E8 100%)' }}
           />
         </div>
