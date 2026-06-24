@@ -34,6 +34,7 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { PixelCat } from '@/components/shared/pixel-cat'
+import { DashboardCharts } from '@/components/dashboard/dashboard-charts'
 import {
   formatCurrency,
   formatDate,
@@ -198,6 +199,7 @@ export default async function DashboardPage() {
   }
   let budgetRows: CategoryWithBudget[] = []
   let recentTxs: TransactionWithRelations[] = []
+  let categorySpendingData: { name: string; spent: number; color: string }[] = []
 
   if (cycle) {
     const [
@@ -262,6 +264,22 @@ export default async function DashboardPage() {
       net_balance: totalIncome - totalExpense,
       untracked_total: untrackedTotal,
     }
+
+    // Category spending for charts (all expense categories, budgeted or not)
+    const categorySpendingMap: Record<string, { name: string; spent: number; color: string }> = {}
+    for (const tx of txList.filter((t) => t.type === 'expense')) {
+      const cat = tx.category_id ? catList.find((c) => c.id === tx.category_id) : null
+      const key = cat?.id ?? 'other'
+      if (!categorySpendingMap[key]) {
+        categorySpendingMap[key] = {
+          name: cat?.name ?? 'Lainnya',
+          spent: 0,
+          color: cat?.color ?? '#B8D4E8',
+        }
+      }
+      categorySpendingMap[key].spent += tx.amount
+    }
+    categorySpendingData = Object.values(categorySpendingMap)
 
     // Budget progress per category
     budgetRows = budgetList
@@ -658,7 +676,16 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* ── 4. Account balances ─────────────────────────────────────────────── */}
+      {/* ── 4. Charts (only if cycle active with data) ─────────────────────── */}
+      {cycle && (summary.total_income > 0 || summary.total_expense > 0) && (
+        <DashboardCharts
+          totalIncome={summary.total_income}
+          totalExpense={summary.total_expense}
+          categorySpending={categorySpendingData}
+        />
+      )}
+
+      {/* ── 5. Account balances ─────────────────────────────────────────────── */}
       <section>
         <div className="flex items-center justify-between mb-3">
           <h2
@@ -772,7 +799,7 @@ export default async function DashboardPage() {
         )}
       </section>
 
-      {/* ── 5. Budget progress (only if cycle) ─────────────────────────────── */}
+      {/* ── 6. Budget progress (only if cycle) ─────────────────────────────── */}
       {cycle && (
         <section>
           <div className="flex items-center justify-between mb-3">
@@ -927,7 +954,7 @@ export default async function DashboardPage() {
         </section>
       )}
 
-      {/* ── 6. Recent transactions ──────────────────────────────────────────── */}
+      {/* ── 7. Recent transactions ──────────────────────────────────────────── */}
       <section>
         <div className="flex items-center justify-between mb-3">
           <h2
