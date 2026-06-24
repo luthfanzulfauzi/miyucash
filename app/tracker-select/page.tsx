@@ -49,9 +49,15 @@ export default function TrackerSelectPage() {
 
   async function activateTracker(t: TrackerOption) {
     setActivating(t.id)
+    await fetch('/api/tracker/switch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trackerId: t.id }),
+    })
     setTracker({ id: t.id, name: t.name })
     toast.success(`${t.name} diaktifkan!`)
     router.push('/dashboard')
+    router.refresh()
   }
 
   if (loading) {

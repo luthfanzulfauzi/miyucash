@@ -19,6 +19,8 @@ import {
   Users,
   Eye,
   EyeOff,
+  ArrowLeftRight,
+  FolderPlus,
 } from 'lucide-react'
 import Link from 'next/link'
 import { createClient as _createClient } from '@/lib/supabase/client'
@@ -300,11 +302,51 @@ export default function SettingsPage() {
                   className="w-9 h-9 rounded-2xl flex items-center justify-center flex-shrink-0"
                   style={{ background: 'rgba(201,184,232,0.25)' }}
                 >
-                  <Users className="h-4.5 w-4.5 text-[#7B5EA7]" />
+                  <Users className="h-4 w-4 text-[#7B5EA7]" />
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-[#3D4A5C] leading-tight">Anggota & Kode Undangan</p>
                   <p className="text-xs text-[#9AAAB8] mt-0.5">Kelola anggota tracker</p>
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-[#C0CAD3] flex-shrink-0" />
+            </div>
+          </Link>
+
+          <div className="border-t" style={{ borderColor: 'rgba(184,212,232,0.15)' }} />
+
+          <Link href="/tracker-select">
+            <div className="flex items-center justify-between px-5 py-3.5 transition-colors hover:bg-white/40 active:bg-white/60">
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-9 h-9 rounded-2xl flex items-center justify-center flex-shrink-0"
+                  style={{ background: 'rgba(184,212,232,0.25)' }}
+                >
+                  <ArrowLeftRight className="h-4 w-4 text-[#4A7B9D]" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-[#3D4A5C] leading-tight">Ganti Tracker</p>
+                  <p className="text-xs text-[#9AAAB8] mt-0.5">Pilih atau switch antar tracker</p>
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-[#C0CAD3] flex-shrink-0" />
+            </div>
+          </Link>
+
+          <div className="border-t" style={{ borderColor: 'rgba(184,212,232,0.15)' }} />
+
+          <Link href="/tracker/new">
+            <div className="flex items-center justify-between px-5 py-3.5 transition-colors hover:bg-white/40 active:bg-white/60">
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-9 h-9 rounded-2xl flex items-center justify-center flex-shrink-0"
+                  style={{ background: 'rgba(168,216,185,0.25)' }}
+                >
+                  <FolderPlus className="h-4 w-4 text-[#3E7A57]" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-[#3D4A5C] leading-tight">Buat Tracker Baru</p>
+                  <p className="text-xs text-[#9AAAB8] mt-0.5">Pisahkan keuangan dengan tracker berbeda</p>
                 </div>
               </div>
               <ChevronRight className="h-4 w-4 text-[#C0CAD3] flex-shrink-0" />

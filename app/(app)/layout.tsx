@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { AppInit } from '@/components/layout/app-init'
 import { BottomNav } from '@/components/layout/bottom-nav'
@@ -14,31 +15,43 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     redirect('/login')
   }
 
-  // Check tracker membership
-  const { data: membershipRaw } = await supabase
-    .from('tracker_members')
-    .select('tracker_id')
-    .eq('user_id', user.id)
-    .maybeSingle()
+  // Resolve which tracker to use: prefer cookie, fallback to first membership
+  const cookieStore = await cookies()
+  const preferredId = cookieStore.get('miyucash_tracker_id')?.value
 
-  const membership = membershipRaw as { tracker_id: string } | null
+  let trackerId: string | null = null
 
-  if (!membership) {
-    redirect('/onboarding')
+  if (preferredId) {
+    const { data } = await supabase
+      .from('tracker_members')
+      .select('tracker_id')
+      .eq('user_id', user.id)
+      .eq('tracker_id', preferredId)
+      .maybeSingle()
+    if (data) trackerId = preferredId
+  }
+
+  if (!trackerId) {
+    const { data: membershipRaw } = await supabase
+      .from('tracker_members')
+      .select('tracker_id')
+      .eq('user_id', user.id)
+      .maybeSingle()
+    const membership = membershipRaw as { tracker_id: string } | null
+    if (!membership) redirect('/onboarding')
+    trackerId = membership!.tracker_id
   }
 
   // Fetch tracker info
   const { data: trackerRaw } = await supabase
     .from('trackers')
     .select('id, name')
-    .eq('id', membership.tracker_id)
+    .eq('id', trackerId)
     .single()
 
   const tracker = trackerRaw as { id: string; name: string } | null
 
-  if (!tracker) {
-    redirect('/onboarding')
-  }
+  if (!tracker) redirect('/onboarding')
 
   // Fetch user profile
   const { data: profile } = await supabase

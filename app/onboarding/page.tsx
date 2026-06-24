@@ -75,6 +75,23 @@ export default function OnboardingPage() {
         return
       }
 
+      // Fetch the new tracker ID to set as selected
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: newTracker } = await (supabase as any)
+        .from('trackers')
+        .select('id')
+        .eq('owner_id', user.id)
+        .eq('invite_code', inviteCode)
+        .single()
+
+      if (newTracker?.id) {
+        await fetch('/api/tracker/switch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trackerId: newTracker.id }),
+        })
+      }
+
       toast.success('Tracker berhasil dibuat! Selamat datang di MiyuCash 🐱')
       router.push('/dashboard')
       router.refresh()
