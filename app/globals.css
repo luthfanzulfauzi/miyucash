@@ -1,0 +1,71 @@
+@import "tw-animate-css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* MiyuCash Pastel Theme */
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.2 0 0);
+    --card: oklch(0.97 0.01 80);
+    --card-foreground: oklch(0.2 0 0);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.2 0 0);
+    /* Primary: biru muda #B8D4E8 */
+    --primary: oklch(0.83 0.04 220);
+    --primary-foreground: oklch(0.2 0 0);
+    /* Secondary: lavender #C9B8E8 */
+    --secondary: oklch(0.82 0.05 290);
+    --secondary-foreground: oklch(0.2 0 0);
+    /* Muted: krem #F5F0E8 */
+    --muted: oklch(0.96 0.01 80);
+    --muted-foreground: oklch(0.55 0 0);
+    /* Accent: peach #F2C4A0 */
+    --accent: oklch(0.88 0.06 55);
+    --accent-foreground: oklch(0.2 0 0);
+    /* Destructive: merah pastel #F2A8A8 */
+    --destructive: oklch(0.82 0.07 15);
+    --destructive-foreground: oklch(0.2 0 0);
+    --border: oklch(0.91 0.01 80);
+    --input: oklch(0.91 0.01 80);
+    --ring: oklch(0.83 0.04 220);
+    --radius: 0.75rem;
+    /* Chart colors */
+    --chart-1: oklch(0.83 0.04 220);
+    --chart-2: oklch(0.82 0.05 290);
+    --chart-3: oklch(0.88 0.06 55);
+    --chart-4: oklch(0.82 0.07 150);
+    --chart-5: oklch(0.88 0.07 80);
+  }
+
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  html {
+    @apply font-sans;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-nunito), var(--font-geist-sans), system-ui, sans-serif;
+  }
+}
+
+/* Pixel art rendering for mascot */
+.pixel-art {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { @apply bg-muted rounded-full; }
+::-webkit-scrollbar-thumb { @apply bg-primary/60 rounded-full; }
+::-webkit-scrollbar-thumb:hover { @apply bg-primary; }
