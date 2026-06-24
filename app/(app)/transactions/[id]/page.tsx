@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getActiveTrackerId } from '@/lib/supabase/server'
 import type { TransactionWithRelations } from '@/types'
 import { TransactionDetail } from './transaction-detail'
 
@@ -11,26 +11,10 @@ export const metadata = { title: 'Detail Transaksi' }
 
 export default async function TransactionPage({ params }: Props) {
   const { id } = await params
-  const supabase = await createClient()
+  const [supabase, trackerId] = await Promise.all([createClient(), getActiveTrackerId()])
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) redirect('/login')
-
-  // Get tracker membership
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = supabase as any
-  const { data: membership } = await db
-    .from('tracker_members')
-    .select('tracker_id')
-    .eq('user_id', user.id)
-    .maybeSingle()
-
-  if (!membership) redirect('/onboarding')
-
-  const trackerId = (membership as { tracker_id: string }).tracker_id
 
   // Fetch transaction with relations
   const { data: transaction } = await db

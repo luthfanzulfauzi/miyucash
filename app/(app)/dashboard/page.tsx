@@ -32,7 +32,7 @@ import {
   CircleDollarSign,
   MoreHorizontal,
 } from 'lucide-react'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getActiveTrackerId } from '@/lib/supabase/server'
 import { PixelCat } from '@/components/shared/pixel-cat'
 import { DashboardCharts } from '@/components/dashboard/dashboard-charts'
 import {
@@ -139,25 +139,14 @@ function TxTypeDot({ type }: { type: 'expense' | 'income' | 'transfer' }) {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default async function DashboardPage() {
-  const supabase = await createClient()
+  const [supabase, trackerId] = await Promise.all([createClient(), getActiveTrackerId()])
 
-  // Step 1: user + tracker
+  // Step 1: user + profile
   const {
     data: { user: authUser },
   } = await supabase.auth.getUser()
 
-  if (!authUser) return null // layout handles redirect
-
-  const { data: membershipRaw } = await supabase
-    .from('tracker_members')
-    .select('*')
-    .eq('user_id', authUser.id)
-    .maybeSingle()
-
-  if (!membershipRaw) return null
-
-  const membership = membershipRaw as { tracker_id: string; user_id: string; joined_at: string }
-  const trackerId: string = membership.tracker_id
+  if (!authUser) return null
 
   const { data: profileRaw } = await supabase
     .from('users')

@@ -1,5 +1,5 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
+import { createClient, getActiveTrackerId } from '@/lib/supabase/server'
+
 import { AccountsClient } from './accounts-client'
 import type { AccountWithBalance } from '@/types'
 import type { Database } from '@/types/supabase'
@@ -24,24 +24,9 @@ function computeBalance(
 }
 
 export default async function AccountsPage() {
-  const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) redirect('/login')
-
-  const { data: membership } = await supabase
-    .from('tracker_members')
-    .select('tracker_id')
-    .eq('user_id', user.id)
-    .maybeSingle()
-
-  if (!membership) redirect('/onboarding')
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const trackerId = (membership as any).tracker_id as string
+  const [supabase, trackerId] = await Promise.all([createClient(), getActiveTrackerId()])
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
 
   // Fetch accounts and all transactions in parallel
   const [{ data: accounts }, { data: transactions }] = await Promise.all([

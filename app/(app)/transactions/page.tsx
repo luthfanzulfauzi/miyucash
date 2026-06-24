@@ -1,7 +1,6 @@
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getActiveTrackerId } from '@/lib/supabase/server'
 import type { TransactionWithRelations, Cycle } from '@/types'
 import { TransactionList } from './transaction-list'
 import { TransactionsExportButton } from './transactions-export-button'
@@ -9,25 +8,10 @@ import { TransactionsExportButton } from './transactions-export-button'
 export const metadata = { title: 'Transaksi' }
 
 export default async function TransactionsPage() {
-  const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) redirect('/login')
+  const [supabase, trackerId] = await Promise.all([createClient(), getActiveTrackerId()])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = supabase as any
-  const { data: membership } = await db
-    .from('tracker_members')
-    .select('tracker_id')
-    .eq('user_id', user.id)
-    .maybeSingle()
-
-  if (!membership) redirect('/onboarding')
-
-  const trackerId = (membership as { tracker_id: string }).tracker_id
 
   // Fetch transactions + all cycles (for export scope selector)
   const [{ data: transactions }, { data: cycles }] = await Promise.all([

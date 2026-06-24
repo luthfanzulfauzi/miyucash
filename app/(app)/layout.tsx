@@ -32,14 +32,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   if (!trackerId) {
-    const { data: membershipRaw } = await supabase
+    const { data: rows } = await supabase
       .from('tracker_members')
       .select('tracker_id')
       .eq('user_id', user.id)
-      .maybeSingle()
-    const membership = membershipRaw as { tracker_id: string } | null
-    if (!membership) redirect('/onboarding')
-    trackerId = membership!.tracker_id
+      .limit(1)
+    if (!rows || rows.length === 0) redirect('/onboarding')
+    trackerId = (rows[0] as { tracker_id: string }).tracker_id
   }
 
   // Fetch tracker info
