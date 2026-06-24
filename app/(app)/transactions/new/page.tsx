@@ -543,29 +543,23 @@ export default function NewTransactionPage() {
           <Tabs defaultValue="expense" className="space-y-5">
             <TabsList
               className="w-full rounded-2xl p-1 h-auto gap-1"
-              style={{ background: 'rgba(255,255,255,0.78)', backdropFilter: 'blur(12px)' }}
+              style={{ background: 'rgba(245,240,232,1)' }}
             >
               <TabsTrigger
                 value="expense"
-                className="flex-1 rounded-xl py-2 text-xs font-bold transition-all data-[state=active]:text-[#3D4A5C] data-[state=active]:shadow-sm"
-                style={{ '--tw-data-active-bg': '#F2A8A8' } as React.CSSProperties}
+                className="flex-1 rounded-xl py-2.5 text-xs font-bold transition-all text-[#9AAAB8] data-[state=active]:text-[#8B3535] data-[state=active]:bg-[#F2A8A8] data-[state=active]:shadow-sm"
               >
-                <span
-                  className="data-[state=active]:text-[#3D4A5C]"
-                  data-state="active"
-                >
-                  Pengeluaran
-                </span>
+                Pengeluaran
               </TabsTrigger>
               <TabsTrigger
                 value="income"
-                className="flex-1 rounded-xl py-2 text-xs font-bold transition-all data-[state=active]:shadow-sm"
+                className="flex-1 rounded-xl py-2.5 text-xs font-bold transition-all text-[#9AAAB8] data-[state=active]:text-[#2D5A3E] data-[state=active]:bg-[#A8D8B9] data-[state=active]:shadow-sm"
               >
                 Pemasukan
               </TabsTrigger>
               <TabsTrigger
                 value="transfer"
-                className="flex-1 rounded-xl py-2 text-xs font-bold transition-all data-[state=active]:shadow-sm"
+                className="flex-1 rounded-xl py-2.5 text-xs font-bold transition-all text-[#9AAAB8] data-[state=active]:text-[#4A2A7A] data-[state=active]:bg-[#C9B8E8] data-[state=active]:shadow-sm"
               >
                 Transfer
               </TabsTrigger>

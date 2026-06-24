@@ -128,6 +128,13 @@ export default function BudgetPage() {
   const [closeOpen, setCloseOpen] = useState(false)
   const [closeLoading, setCloseLoading] = useState(false)
 
+  // Add single budget dialog
+  const [addOpen, setAddOpen] = useState(false)
+  const [addCategoryId, setAddCategoryId] = useState('')
+  const [addAmount, setAddAmount] = useState('')
+  const [addLoading, setAddLoading] = useState(false)
+  const [unbudgetedCats, setUnbudgetedCats] = useState<{ id: string; name: string; icon: string; color: string | null }[]>([])
+
   const loadData = useCallback(async () => {
     if (!trackerId) return
     setLoading(true)
@@ -253,6 +260,47 @@ export default function BudgetPage() {
       toast.error('Gagal menyimpan budget. Coba lagi.')
     } finally {
       setEditLoading(false)
+    }
+  }
+
+  async function openAddDialog() {
+    if (!trackerId || !cycle) return
+    const supabase = createClient()
+    const { data: cats } = await supabase
+      .from('categories')
+      .select('id, name, icon, color')
+      .eq('tracker_id', trackerId)
+      .eq('type', 'expense')
+      .order('name')
+    const budgetedIds = new Set(budgets.map((b) => b.category_id))
+    const unbudgeted = ((cats ?? []) as { id: string; name: string; icon: string; color: string | null }[])
+      .filter((c) => !budgetedIds.has(c.id))
+    setUnbudgetedCats(unbudgeted)
+    setAddCategoryId(unbudgeted[0]?.id ?? '')
+    setAddAmount('')
+    setAddOpen(true)
+  }
+
+  async function saveAddBudget() {
+    if (!cycle || !addCategoryId || !addAmount) return
+    const amount = parseFloat(addAmount)
+    if (isNaN(amount) || amount <= 0) { toast.error('Jumlah tidak valid.'); return }
+    setAddLoading(true)
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.from('budgets').insert({
+        cycle_id: cycle.id,
+        category_id: addCategoryId,
+        amount,
+      })
+      if (error) throw error
+      toast.success('Budget ditambahkan!')
+      setAddOpen(false)
+      await loadData()
+    } catch {
+      toast.error('Gagal menyimpan. Coba lagi.')
+    } finally {
+      setAddLoading(false)
     }
   }
 
@@ -433,6 +481,18 @@ export default function BudgetPage() {
                 <div className="flex gap-2">
                   <Button
                     size="sm"
+                    onClick={openAddDialog}
+                    className="rounded-xl font-bold text-xs gap-1.5 shadow-sm transition-all active:scale-95 h-9 px-3"
+                    style={{
+                      background: 'linear-gradient(135deg, #B8D4E8 0%, #A8C8E0 100%)',
+                      color: '#2D3E50',
+                    }}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Tambah
+                  </Button>
+                  <Button
+                    size="sm"
                     onClick={openEditDialog}
                     className="flex-1 rounded-xl font-bold text-xs gap-1.5 shadow-sm transition-all active:scale-95 h-9"
                     style={{
@@ -442,7 +502,7 @@ export default function BudgetPage() {
                     }}
                   >
                     <Pencil className="h-3.5 w-3.5" />
-                    Edit Budget
+                    Edit Semua
                   </Button>
                   {isOwner && (
                     <Button
@@ -594,7 +654,14 @@ export default function BudgetPage() {
                   >
                     Per Kategori
                   </h3>
-                  <span className="text-xs text-[#9AAAB8]">{budgets.length} kategori</span>
+                  <button
+                    onClick={openAddDialog}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold transition-all active:scale-95"
+                    style={{ background: 'rgba(184,212,232,0.25)', color: '#4A7B9D' }}
+                  >
+                    <Plus className="h-3 w-3" />
+                    Tambah
+                  </button>
                 </div>
 
                 {budgets.map((b, idx) => {
@@ -836,6 +903,86 @@ export default function BudgetPage() {
               Tutup Cycle
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Add single budget dialog ── */}
+      <Dialog open={addOpen} onOpenChange={(o) => { if (!o) setAddOpen(false) }}>
+        <DialogContent
+          className="rounded-3xl border-0 p-0 max-w-sm overflow-hidden"
+          style={{ background: 'rgba(255,255,255,0.97)' }}
+        >
+          <DialogHeader className="px-6 pt-6 pb-0">
+            <DialogTitle
+              className="text-lg font-extrabold text-[#3D4A5C] flex items-center gap-2"
+              style={{ fontFamily: 'var(--font-nunito)' }}
+            >
+              <div className="w-8 h-8 rounded-xl bg-[#B8D4E8]/40 flex items-center justify-center">
+                <Plus className="h-4 w-4 text-[#4A7B9D]" />
+              </div>
+              Tambah Budget
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="px-6 py-5 space-y-4">
+            {unbudgetedCats.length === 0 ? (
+              <p className="text-sm text-[#7A8899] text-center py-4">
+                Semua kategori sudah punya budget. Gunakan <strong>Edit Semua</strong> untuk mengubah.
+              </p>
+            ) : (
+              <>
+                <div>
+                  <p className="text-xs font-bold text-[#7A8899] uppercase tracking-wider mb-2">Kategori</p>
+                  <select
+                    value={addCategoryId}
+                    onChange={(e) => setAddCategoryId(e.target.value)}
+                    className="w-full h-10 rounded-xl border px-3 text-sm font-semibold text-[#3D4A5C] bg-[#F5F0E8] focus:outline-none focus:ring-2 focus:ring-[#B8D4E8]"
+                    style={{ borderColor: 'rgba(184,212,232,0.5)' }}
+                  >
+                    {unbudgetedCats.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-[#7A8899] uppercase tracking-wider mb-2">Limit Budget (Rp)</p>
+                  <Input
+                    type="number"
+                    placeholder="0"
+                    value={addAmount}
+                    onChange={(e) => setAddAmount(e.target.value)}
+                    className="h-10 rounded-xl border-[#B8D4E8]/50 bg-[#F5F0E8]/60 text-sm font-bold text-[#3D4A5C] focus-visible:ring-[#B8D4E8]"
+                    min="0"
+                  />
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="px-6 pb-6 flex gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => setAddOpen(false)}
+              className="flex-1 h-11 rounded-xl font-bold text-sm"
+              style={{ background: '#F5F0E8', color: '#7A8899' }}
+            >
+              Batal
+            </Button>
+            {unbudgetedCats.length > 0 && (
+              <Button
+                onClick={saveAddBudget}
+                disabled={addLoading || !addCategoryId || !addAmount}
+                className="flex-1 h-11 rounded-xl font-bold text-sm gap-2 shadow-md"
+                style={{
+                  background: 'linear-gradient(135deg, #B8D4E8 0%, #A8C8E0 100%)',
+                  color: '#2D3E50',
+                }}
+              >
+                {addLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                Simpan
+              </Button>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
