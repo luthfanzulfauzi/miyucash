@@ -134,6 +134,8 @@ export default function BudgetPage() {
   const [addAmount, setAddAmount] = useState('')
   const [addLoading, setAddLoading] = useState(false)
   const [unbudgetedCats, setUnbudgetedCats] = useState<{ id: string; name: string; icon: string; color: string | null }[]>([])
+  const [addMode, setAddMode] = useState<'existing' | 'new'>('existing')
+  const [addNewCatName, setAddNewCatName] = useState('')
 
   const loadData = useCallback(async () => {
     if (!trackerId) return
@@ -278,19 +280,41 @@ export default function BudgetPage() {
     setUnbudgetedCats(unbudgeted)
     setAddCategoryId(unbudgeted[0]?.id ?? '')
     setAddAmount('')
+    setAddNewCatName('')
+    setAddMode(unbudgeted.length > 0 ? 'existing' : 'new')
     setAddOpen(true)
   }
 
   async function saveAddBudget() {
-    if (!cycle || !addCategoryId || !addAmount) return
     const amount = parseFloat(addAmount)
     if (isNaN(amount) || amount <= 0) { toast.error('Jumlah tidak valid.'); return }
+    if (!cycle) { toast.error('Tidak ada cycle aktif.'); return }
+
     setAddLoading(true)
     try {
       const supabase = createClient()
+      let categoryId = addCategoryId
+
+      if (addMode === 'new') {
+        const name = addNewCatName.trim()
+        if (!name) { toast.error('Nama kategori tidak boleh kosong.'); return }
+        const { data: newCat, error: catError } = await supabase
+          .from('categories')
+          .insert({ tracker_id: trackerId, name, type: 'expense', icon: 'circle', color: '#B8D4E8' })
+          .select('id')
+          .single()
+        if (catError) {
+          if (catError.code === '23505') { toast.error(`Kategori "${name}" sudah ada.`); return }
+          throw catError
+        }
+        categoryId = newCat.id
+      } else {
+        if (!categoryId) { toast.error('Pilih kategori terlebih dahulu.'); return }
+      }
+
       const { error } = await supabase.from('budgets').insert({
         cycle_id: cycle.id,
-        category_id: addCategoryId,
+        category_id: categoryId,
         amount,
       })
       if (error) throw error
@@ -925,38 +949,70 @@ export default function BudgetPage() {
           </DialogHeader>
 
           <div className="px-6 py-5 space-y-4">
-            {unbudgetedCats.length === 0 ? (
-              <p className="text-sm text-[#7A8899] text-center py-4">
-                Semua kategori sudah punya budget. Gunakan <strong>Edit Semua</strong> untuk mengubah.
-              </p>
+            {/* Mode toggle */}
+            <div className="flex rounded-xl overflow-hidden border" style={{ borderColor: 'rgba(184,212,232,0.4)' }}>
+              {unbudgetedCats.length > 0 && (
+                <button
+                  onClick={() => setAddMode('existing')}
+                  className="flex-1 py-2 text-xs font-bold transition-colors"
+                  style={{
+                    background: addMode === 'existing' ? '#B8D4E8' : 'transparent',
+                    color: addMode === 'existing' ? '#2D3E50' : '#9AAAB8',
+                  }}
+                >
+                  Pilih Kategori
+                </button>
+              )}
+              <button
+                onClick={() => setAddMode('new')}
+                className="flex-1 py-2 text-xs font-bold transition-colors"
+                style={{
+                  background: addMode === 'new' ? '#C9B8E8' : 'transparent',
+                  color: addMode === 'new' ? '#3D2A5A' : '#9AAAB8',
+                }}
+              >
+                + Kategori Baru
+              </button>
+            </div>
+
+            {addMode === 'existing' && unbudgetedCats.length > 0 ? (
+              <div>
+                <p className="text-xs font-bold text-[#7A8899] uppercase tracking-wider mb-2">Kategori</p>
+                <select
+                  value={addCategoryId}
+                  onChange={(e) => setAddCategoryId(e.target.value)}
+                  className="w-full h-10 rounded-xl border px-3 text-sm font-semibold text-[#3D4A5C] bg-[#F5F0E8] focus:outline-none focus:ring-2 focus:ring-[#B8D4E8]"
+                  style={{ borderColor: 'rgba(184,212,232,0.5)' }}
+                >
+                  {unbudgetedCats.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
             ) : (
-              <>
-                <div>
-                  <p className="text-xs font-bold text-[#7A8899] uppercase tracking-wider mb-2">Kategori</p>
-                  <select
-                    value={addCategoryId}
-                    onChange={(e) => setAddCategoryId(e.target.value)}
-                    className="w-full h-10 rounded-xl border px-3 text-sm font-semibold text-[#3D4A5C] bg-[#F5F0E8] focus:outline-none focus:ring-2 focus:ring-[#B8D4E8]"
-                    style={{ borderColor: 'rgba(184,212,232,0.5)' }}
-                  >
-                    {unbudgetedCats.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-[#7A8899] uppercase tracking-wider mb-2">Limit Budget (Rp)</p>
-                  <Input
-                    type="number"
-                    placeholder="0"
-                    value={addAmount}
-                    onChange={(e) => setAddAmount(e.target.value)}
-                    className="h-10 rounded-xl border-[#B8D4E8]/50 bg-[#F5F0E8]/60 text-sm font-bold text-[#3D4A5C] focus-visible:ring-[#B8D4E8]"
-                    min="0"
-                  />
-                </div>
-              </>
+              <div>
+                <p className="text-xs font-bold text-[#7A8899] uppercase tracking-wider mb-2">Nama Kategori Baru</p>
+                <Input
+                  placeholder="contoh: Liburan, Renovasi, Investasi…"
+                  value={addNewCatName}
+                  onChange={(e) => setAddNewCatName(e.target.value)}
+                  className="h-10 rounded-xl border-[#C9B8E8]/50 bg-[#F5F0E8]/60 text-sm font-semibold text-[#3D4A5C] focus-visible:ring-[#C9B8E8]"
+                  maxLength={40}
+                />
+              </div>
             )}
+
+            <div>
+              <p className="text-xs font-bold text-[#7A8899] uppercase tracking-wider mb-2">Limit Budget (Rp)</p>
+              <Input
+                type="number"
+                placeholder="0"
+                value={addAmount}
+                onChange={(e) => setAddAmount(e.target.value)}
+                className="h-10 rounded-xl border-[#B8D4E8]/50 bg-[#F5F0E8]/60 text-sm font-bold text-[#3D4A5C] focus-visible:ring-[#B8D4E8]"
+                min="0"
+              />
+            </div>
           </div>
 
           <div className="px-6 pb-6 flex gap-2">
@@ -968,20 +1024,25 @@ export default function BudgetPage() {
             >
               Batal
             </Button>
-            {unbudgetedCats.length > 0 && (
-              <Button
-                onClick={saveAddBudget}
-                disabled={addLoading || !addCategoryId || !addAmount}
-                className="flex-1 h-11 rounded-xl font-bold text-sm gap-2 shadow-md"
-                style={{
-                  background: 'linear-gradient(135deg, #B8D4E8 0%, #A8C8E0 100%)',
-                  color: '#2D3E50',
-                }}
-              >
-                {addLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                Simpan
-              </Button>
-            )}
+            <Button
+              onClick={saveAddBudget}
+              disabled={
+                addLoading ||
+                !addAmount ||
+                (addMode === 'existing' && !addCategoryId) ||
+                (addMode === 'new' && !addNewCatName.trim())
+              }
+              className="flex-1 h-11 rounded-xl font-bold text-sm gap-2 shadow-md"
+              style={{
+                background: addMode === 'new'
+                  ? 'linear-gradient(135deg, #C9B8E8 0%, #B8A8D8 100%)'
+                  : 'linear-gradient(135deg, #B8D4E8 0%, #A8C8E0 100%)',
+                color: '#2D3E50',
+              }}
+            >
+              {addLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              Simpan
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
