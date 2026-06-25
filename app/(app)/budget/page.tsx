@@ -742,10 +742,13 @@ export default function BudgetPage() {
 
                       <div className="flex items-center justify-between">
                         <span className="text-[11px] text-[#9AAAB8]">
-                          {formatCurrency(b.spent)} terpakai
+                          {formatCurrency(b.spent)} terpakai · dari {formatCurrency(b.amount)}
                         </span>
-                        <span className="text-[11px] text-[#9AAAB8]">
-                          dari {formatCurrency(b.amount)}
+                        <span
+                          className="text-[11px] font-semibold"
+                          style={{ color: b.amount - b.spent >= 0 ? '#3E7A57' : '#C0605A' }}
+                        >
+                          sisa {formatCurrency(Math.max(0, b.amount - b.spent))}
                         </span>
                       </div>
                     </div>
