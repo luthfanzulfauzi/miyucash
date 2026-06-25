@@ -39,6 +39,7 @@ import {
   Cat,
   Briefcase,
   Laptop,
+  Receipt,
 } from 'lucide-react'
 import { createClient, getActiveTrackerId } from '@/lib/supabase/server'
 import { PixelCat } from '@/components/shared/pixel-cat'
@@ -86,6 +87,7 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   smartphone: Smartphone,
   hand: Hand,
   cat: Cat,
+  receipt: Receipt,
   zap: Zap,
   heart: Heart,
   tv: Tv,

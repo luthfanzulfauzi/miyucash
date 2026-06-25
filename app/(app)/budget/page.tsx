@@ -40,6 +40,7 @@ import {
   Smartphone,
   Hand,
   Cat,
+  Receipt,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient as _createClient } from '@/lib/supabase/client'
@@ -88,6 +89,7 @@ const ICONS: Record<string, React.ComponentType<{ className?: string; style?: Re
   smartphone: Smartphone,
   hand: Hand,
   cat: Cat,
+  receipt: Receipt,
 }
 
 function CategoryIcon({ name, className, style }: { name: string; className?: string; style?: React.CSSProperties }) {
