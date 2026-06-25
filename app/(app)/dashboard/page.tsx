@@ -929,10 +929,13 @@ export default async function DashboardPage() {
                   </div>
                   <div className="flex items-center justify-between mt-1.5">
                     <span className="text-[11px] text-[#9AAAB8]">
-                      {formatCurrency(b.spent)} dipakai
+                      {formatCurrency(b.spent)} dipakai · dari {formatCurrency(b.budget_limit)}
                     </span>
-                    <span className="text-[11px] text-[#9AAAB8]">
-                      dari {formatCurrency(b.budget_limit)}
+                    <span
+                      className="text-[11px] font-semibold"
+                      style={{ color: b.budget_limit - b.spent >= 0 ? '#3E7A57' : '#C0605A' }}
+                    >
+                      sisa {formatCurrency(Math.max(0, b.budget_limit - b.spent))}
                     </span>
                   </div>
                 </div>
