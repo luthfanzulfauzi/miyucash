@@ -47,67 +47,33 @@ export default function JoinPage() {
       const supabase = createClient()
       const upperCode = values.code.toUpperCase()
 
-      // Find tracker by invite code
-      const { data: trackerRaw } = await supabase
-        .from('trackers')
-        .select('id, name')
-        .eq('invite_code', upperCode)
-        .single()
-
-      const tracker = trackerRaw as { id: string; name: string } | null
-
-      if (!tracker) {
-        toast.error('Kode tidak valid. Periksa kembali kode dari pasangan kamu.')
-        return
-      }
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (!user) {
-        toast.error('Sesi tidak ditemukan. Silakan login ulang.')
-        router.push('/login')
-        return
-      }
-
-      // Check if already a member
-      const { data: existing } = await supabase
-        .from('tracker_members')
-        .select('user_id')
-        .eq('tracker_id', tracker.id)
-        .eq('user_id', user.id)
-        .maybeSingle()
-
-      if (existing) {
-        toast.error('Kamu sudah bergabung di tracker ini.')
-        router.push('/dashboard')
-        return
-      }
-
-      // Check current member count
-      const { count } = await supabase
-        .from('tracker_members')
-        .select('*', { count: 'exact', head: true })
-        .eq('tracker_id', tracker.id)
-
-      if ((count ?? 0) >= 2) {
-        toast.error('Tracker sudah penuh. Tracker hanya bisa punya 2 anggota.')
-        return
-      }
-
-      // Join
+      // Invite verification + 2-member cap are enforced server-side (RLS-safe).
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: joinError } = await (supabase as any)
-        .from('tracker_members')
-        .insert({ tracker_id: tracker.id, user_id: user.id })
+      const { data, error } = await (supabase as any).rpc('join_tracker', {
+        p_code: upperCode,
+      })
 
-      if (joinError) {
-        toast.error(joinError.message)
+      if (error) {
+        const msg = String(error.message ?? '')
+        if (msg.includes('invalid_code')) {
+          toast.error('Kode tidak valid. Periksa kembali kode dari pasangan kamu.')
+        } else if (msg.includes('tracker_full')) {
+          toast.error('Tracker sudah penuh. Tracker hanya bisa punya 2 anggota.')
+        } else if (msg.includes('not_authenticated')) {
+          toast.error('Sesi tidak ditemukan. Silakan login ulang.')
+          router.push('/login')
+        } else {
+          toast.error('Terjadi kesalahan. Coba lagi.')
+        }
         return
       }
 
-      toast.success(`Berhasil bergabung dengan "${tracker.name}"! 🎉`)
+      const row = (Array.isArray(data) ? data[0] : data) as
+        | { out_tracker_name?: string }
+        | undefined
+      const name = row?.out_tracker_name ?? 'tracker'
+
+      toast.success(`Berhasil bergabung dengan "${name}"! 🎉`)
       router.push('/dashboard')
       router.refresh()
     } catch {
