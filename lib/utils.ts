@@ -56,7 +56,7 @@ export function getInitials(name: string): string {
 // when Tailwind's content scanner doesn't see the literal (lib/ isn't scanned).
 export function budgetProgressColor(pct: number): string {
   if (pct >= 100) return '#F2A8A8'
-  if (pct >= 80) return '#F5E6A3'
+  if (pct >= 80) return '#F5C9A3'
   return '#A8D8B9'
 }
 

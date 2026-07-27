@@ -41,7 +41,7 @@ interface CycleWithSummary extends Cycle {
 
 function budgetBarColor(pct: number) {
   if (pct >= 100) return '#F2A8A8'
-  if (pct >= 80) return '#F5E6A3'
+  if (pct >= 80) return '#F5C9A3'
   return '#A8D8B9'
 }
 
