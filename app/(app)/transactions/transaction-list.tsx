@@ -7,8 +7,17 @@ import {
   ArrowUpRight,
   ArrowLeftRight,
   Search,
+  SlidersHorizontal,
+  X,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { PixelCat } from '@/components/shared/pixel-cat'
 import type { TransactionWithRelations } from '@/types'
 import { formatCurrency, formatDate, transactionAmountColor, transactionAmountPrefix } from '@/lib/utils'
@@ -45,13 +54,68 @@ const TYPE_ICON_COLOR: Record<string, string> = {
   transfer: '#6B9DC0',
 }
 
+const ALL = 'all'
+
 export function TransactionList({ transactions }: TransactionListProps) {
   const [filter, setFilter] = useState<FilterType>('all')
   const [search, setSearch] = useState('')
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [accountFilter, setAccountFilter] = useState<string>(ALL)
+  const [categoryFilter, setCategoryFilter] = useState<string>(ALL)
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+
+  // Derive account & category options from the loaded transactions
+  const accountOptions = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const t of transactions) {
+      if (t.account) map.set(t.account.id, t.account.name)
+      if (t.to_account) map.set(t.to_account.id, t.to_account.name)
+    }
+    return Array.from(map, ([id, name]) => ({ id, name })).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    )
+  }, [transactions])
+
+  const categoryOptions = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const t of transactions) {
+      if (t.category) map.set(t.category.id, t.category.name)
+    }
+    return Array.from(map, ([id, name]) => ({ id, name })).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    )
+  }, [transactions])
+
+  const activeCount =
+    (accountFilter !== ALL ? 1 : 0) +
+    (categoryFilter !== ALL ? 1 : 0) +
+    (dateFrom ? 1 : 0) +
+    (dateTo ? 1 : 0)
+
+  const resetAdvanced = () => {
+    setAccountFilter(ALL)
+    setCategoryFilter(ALL)
+    setDateFrom('')
+    setDateTo('')
+  }
 
   const filtered = useMemo(() => {
     return transactions.filter((t) => {
       if (filter !== 'all' && t.type !== filter) return false
+
+      if (accountFilter !== ALL) {
+        const matchesAccount =
+          t.account?.id === accountFilter || t.to_account?.id === accountFilter
+        if (!matchesAccount) return false
+      }
+
+      if (categoryFilter !== ALL && t.category?.id !== categoryFilter) return false
+
+      const day = t.date.slice(0, 10)
+      if (dateFrom && day < dateFrom) return false
+      if (dateTo && day > dateTo) return false
+
       if (search.trim()) {
         const q = search.toLowerCase()
         const noteMatch = t.note?.toLowerCase().includes(q) ?? false
@@ -61,7 +125,7 @@ export function TransactionList({ transactions }: TransactionListProps) {
       }
       return true
     })
-  }, [transactions, filter, search])
+  }, [transactions, filter, search, accountFilter, categoryFilter, dateFrom, dateTo])
 
   // Group by date
   const grouped = useMemo(() => {
@@ -74,19 +138,49 @@ export function TransactionList({ transactions }: TransactionListProps) {
     return Array.from(map.entries())
   }, [filtered])
 
+  const selectTriggerStyle = {
+    background: 'rgba(255,255,255,0.78)',
+    backdropFilter: 'blur(12px)',
+  }
+
   return (
     <div className="space-y-4">
       {/* Search + Filter */}
       <div className="space-y-3 pt-2">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9AAAB8]" />
-          <Input
-            placeholder="Cari transaksi..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 rounded-2xl border-0 text-sm text-[#3D4A5C] placeholder:text-[#9AAAB8] focus-visible:ring-[#B8D4E8]"
-            style={{ background: 'rgba(255,255,255,0.78)', backdropFilter: 'blur(12px)' }}
-          />
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9AAAB8]" />
+            <Input
+              placeholder="Cari transaksi..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 rounded-2xl border-0 text-sm text-[#3D4A5C] placeholder:text-[#9AAAB8] focus-visible:ring-[#B8D4E8]"
+              style={{ background: 'rgba(255,255,255,0.78)', backdropFilter: 'blur(12px)' }}
+            />
+          </div>
+          <button
+            onClick={() => setShowAdvanced((v) => !v)}
+            aria-label="Filter lanjutan"
+            className={cn(
+              'relative flex-shrink-0 w-11 h-11 rounded-2xl flex items-center justify-center transition-all active:scale-95',
+              showAdvanced || activeCount > 0 ? 'text-[#3D4A5C] shadow-sm' : 'text-[#7A8899]',
+            )}
+            style={
+              showAdvanced || activeCount > 0
+                ? { background: '#B8D4E8' }
+                : { background: 'rgba(255,255,255,0.78)', backdropFilter: 'blur(12px)' }
+            }
+          >
+            <SlidersHorizontal className="h-4 w-4 stroke-[2.2]" />
+            {activeCount > 0 && (
+              <span
+                className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-extrabold flex items-center justify-center text-white"
+                style={{ background: '#D97B7B' }}
+              >
+                {activeCount}
+              </span>
+            )}
+          </button>
         </div>
 
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
@@ -110,6 +204,93 @@ export function TransactionList({ transactions }: TransactionListProps) {
             </button>
           ))}
         </div>
+
+        {/* Advanced filters */}
+        {showAdvanced && (
+          <div
+            className="rounded-3xl p-4 space-y-3"
+            style={{ background: 'rgba(255,255,255,0.60)', backdropFilter: 'blur(12px)' }}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-[#7A8899]">Filter lanjutan</span>
+              {activeCount > 0 && (
+                <button
+                  onClick={resetAdvanced}
+                  className="flex items-center gap-1 text-xs font-bold text-[#D97B7B] active:scale-95 transition-transform"
+                >
+                  <X className="h-3.5 w-3.5 stroke-[2.5]" />
+                  Reset
+                </button>
+              )}
+            </div>
+
+            {/* Account */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-[#7A8899] px-1">Akun</label>
+              <Select value={accountFilter} onValueChange={setAccountFilter}>
+                <SelectTrigger
+                  className="rounded-2xl border-0 text-sm text-[#3D4A5C]"
+                  style={selectTriggerStyle}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>Semua akun</SelectItem>
+                  {accountOptions.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Category */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-[#7A8899] px-1">Kategori</label>
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger
+                  className="rounded-2xl border-0 text-sm text-[#3D4A5C]"
+                  style={selectTriggerStyle}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>Semua kategori</SelectItem>
+                  {categoryOptions.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Date range */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-[#7A8899] px-1">Rentang tanggal</label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="date"
+                  value={dateFrom}
+                  max={dateTo || undefined}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="rounded-2xl border-0 text-sm text-[#3D4A5C] focus-visible:ring-[#B8D4E8]"
+                  style={selectTriggerStyle}
+                />
+                <span className="text-xs text-[#9AAAB8] font-medium">—</span>
+                <Input
+                  type="date"
+                  value={dateTo}
+                  min={dateFrom || undefined}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="rounded-2xl border-0 text-sm text-[#3D4A5C] focus-visible:ring-[#B8D4E8]"
+                  style={selectTriggerStyle}
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Empty state */}

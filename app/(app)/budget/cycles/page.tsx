@@ -11,6 +11,7 @@ import {
   ChevronRight,
   PiggyBank,
   Download,
+  Pencil,
 } from 'lucide-react'
 import { createClient as _createClient } from '@/lib/supabase/client'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -18,6 +19,15 @@ const createClient = _createClient as unknown as () => any
 import { toast } from 'sonner'
 import { useTrackerStore } from '@/stores/tracker'
 import { PixelCat } from '@/components/shared/pixel-cat'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { Cycle } from '@/types'
 import type { CycleExportData } from '@/lib/export/xlsx'
@@ -35,10 +45,64 @@ function budgetBarColor(pct: number) {
 }
 
 export default function CyclesPage() {
-  const { trackerId } = useTrackerStore()
+  const { trackerId, activeCycle, setActiveCycle } = useTrackerStore()
   const [cycles, setCycles] = useState<CycleWithSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [exporting, setExporting] = useState<string | null>(null)
+
+  // Edit cycle dialog state
+  const [editCycle, setEditCycle] = useState<Cycle | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editStart, setEditStart] = useState('')
+  const [editEnd, setEditEnd] = useState('')
+  const [savingEdit, setSavingEdit] = useState(false)
+
+  function openEdit(cycle: Cycle) {
+    setEditCycle(cycle)
+    setEditName(cycle.name)
+    setEditStart(cycle.start_date.slice(0, 10))
+    setEditEnd(cycle.end_date.slice(0, 10))
+  }
+
+  async function saveEdit() {
+    if (!editCycle || savingEdit) return
+    if (!editName.trim()) {
+      toast.error('Nama cycle wajib diisi.')
+      return
+    }
+    if (editEnd <= editStart) {
+      toast.error('Tanggal selesai harus setelah tanggal mulai.')
+      return
+    }
+    setSavingEdit(true)
+    try {
+      const supabase = createClient()
+      const { data: updated, error } = await supabase
+        .from('cycles')
+        .update({ name: editName.trim(), start_date: editStart, end_date: editEnd })
+        .eq('id', editCycle.id)
+        .select()
+        .single()
+
+      if (error || !updated) {
+        toast.error((error as { message?: string } | null)?.message ?? 'Gagal menyimpan perubahan.')
+        return
+      }
+
+      // Keep the global active-cycle in sync so budget/dashboard use the new dates
+      if (activeCycle?.id === updated.id) {
+        setActiveCycle(updated)
+      }
+
+      toast.success('Cycle berhasil diperbarui!')
+      setEditCycle(null)
+      await loadCycles()
+    } catch {
+      toast.error('Terjadi kesalahan. Coba lagi.')
+    } finally {
+      setSavingEdit(false)
+    }
+  }
 
   const loadCycles = useCallback(async () => {
     if (!trackerId) return
@@ -312,6 +376,14 @@ export default function CyclesPage() {
                       </Link>
                     )}
                     <button
+                      onClick={() => openEdit(cycle)}
+                      title="Edit cycle"
+                      className="flex items-center justify-center w-8 h-8 rounded-xl transition-all active:scale-95"
+                      style={{ background: 'rgba(201,184,232,0.3)', color: '#7B5EA7' }}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
                       onClick={() => exportCycle(cycle)}
                       disabled={exporting === cycle.id}
                       title="Export XLSX"
@@ -386,6 +458,88 @@ export default function CyclesPage() {
           ))
         )}
       </div>
+
+      {/* Edit cycle dialog */}
+      <Dialog open={editCycle !== null} onOpenChange={(open) => !open && setEditCycle(null)}>
+        <DialogContent className="rounded-3xl border-0 max-w-sm" style={{ background: '#F5F0E8' }}>
+          <DialogHeader>
+            <DialogTitle
+              className="text-lg font-extrabold text-[#3D4A5C] flex items-center gap-2"
+              style={{ fontFamily: 'var(--font-nunito)' }}
+            >
+              <Pencil className="h-4 w-4 text-[#7B5EA7]" />
+              Edit Cycle
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-1">
+            {/* Name */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-[#7A8899] uppercase tracking-wide">
+                Nama Cycle
+              </Label>
+              <Input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="contoh: Juli 2026"
+                className="rounded-xl border-[#B8D4E8]/50 bg-white/70 focus-visible:ring-[#B8D4E8] h-11 text-[#3D4A5C] font-semibold"
+              />
+            </div>
+
+            {/* Start date */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-[#7A8899] uppercase tracking-wide">
+                Tanggal Mulai
+              </Label>
+              <Input
+                type="date"
+                value={editStart}
+                max={editEnd || undefined}
+                onChange={(e) => setEditStart(e.target.value)}
+                className="rounded-xl border-[#B8D4E8]/50 bg-white/70 focus-visible:ring-[#B8D4E8] h-11 text-[#3D4A5C] font-semibold"
+              />
+            </div>
+
+            {/* End date */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-[#7A8899] uppercase tracking-wide">
+                Tanggal Selesai
+              </Label>
+              <Input
+                type="date"
+                value={editEnd}
+                min={editStart || undefined}
+                onChange={(e) => setEditEnd(e.target.value)}
+                className="rounded-xl border-[#B8D4E8]/50 bg-white/70 focus-visible:ring-[#B8D4E8] h-11 text-[#3D4A5C] font-semibold"
+              />
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Button
+                type="button"
+                onClick={() => setEditCycle(null)}
+                disabled={savingEdit}
+                className="flex-1 h-11 rounded-2xl font-bold text-sm bg-white/70 text-[#7A8899] hover:bg-white shadow-none border border-[#B8D4E8]/30"
+              >
+                Batal
+              </Button>
+              <Button
+                type="button"
+                onClick={saveEdit}
+                disabled={savingEdit}
+                className="flex-1 h-11 rounded-2xl font-bold text-sm shadow-md transition-all active:scale-[0.98] gap-2"
+                style={{
+                  background: 'linear-gradient(135deg, #C9B8E8 0%, #B8A8E0 100%)',
+                  color: '#3D2A5C',
+                }}
+              >
+                {savingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {savingEdit ? 'Menyimpan...' : 'Simpan'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
