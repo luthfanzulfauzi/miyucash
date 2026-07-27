@@ -57,7 +57,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { formatCurrency, formatDate, budgetProgressColor } from '@/lib/utils'
+import { formatCurrency, formatDate, budgetProgressColor, daysRemainingJakarta } from '@/lib/utils'
 import type { Cycle, Category } from '@/types'
 
 // ─── Icon map ────────────────────────────────────────────────────────────────
@@ -95,12 +95,6 @@ const ICONS: Record<string, React.ComponentType<{ className?: string; style?: Re
 function CategoryIcon({ name, className, style }: { name: string; className?: string; style?: React.CSSProperties }) {
   const Icon = ICONS[name] ?? MoreHorizontal
   return <Icon className={className} style={style} />
-}
-
-function daysRemaining(endDate: string): number {
-  const end = new Date(endDate)
-  end.setHours(23, 59, 59, 999)
-  return Math.max(0, Math.ceil((end.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
 }
 
 interface BudgetWithProgress {
@@ -484,12 +478,12 @@ export default function BudgetPage() {
                   <div
                     className="flex-shrink-0 px-3 py-1.5 rounded-2xl text-center"
                     style={{
-                      background: daysRemaining(cycle.end_date) <= 3
-                        ? 'rgba(242,168,168,0.35)' : daysRemaining(cycle.end_date) <= 7
+                      background: daysRemainingJakarta(cycle.end_date) <= 3
+                        ? 'rgba(242,168,168,0.35)' : daysRemainingJakarta(cycle.end_date) <= 7
                           ? 'rgba(245,230,163,0.45)' : 'rgba(168,216,185,0.35)',
                       border: '1px solid',
-                      borderColor: daysRemaining(cycle.end_date) <= 3
-                        ? 'rgba(242,168,168,0.5)' : daysRemaining(cycle.end_date) <= 7
+                      borderColor: daysRemainingJakarta(cycle.end_date) <= 3
+                        ? 'rgba(242,168,168,0.5)' : daysRemainingJakarta(cycle.end_date) <= 7
                           ? 'rgba(245,230,163,0.6)' : 'rgba(168,216,185,0.5)',
                     }}
                   >
@@ -497,15 +491,15 @@ export default function BudgetPage() {
                       className="text-xl font-extrabold leading-none"
                       style={{
                         fontFamily: 'var(--font-nunito)',
-                        color: daysRemaining(cycle.end_date) <= 3 ? '#C0605A' : daysRemaining(cycle.end_date) <= 7 ? '#8A7A30' : '#3E7A57',
+                        color: daysRemainingJakarta(cycle.end_date) <= 3 ? '#C0605A' : daysRemainingJakarta(cycle.end_date) <= 7 ? '#8A7A30' : '#3E7A57',
                       }}
                     >
-                      {daysRemaining(cycle.end_date)}
+                      {daysRemainingJakarta(cycle.end_date)}
                     </p>
                     <p
                       className="text-[9px] font-bold uppercase tracking-wide"
                       style={{
-                        color: daysRemaining(cycle.end_date) <= 3 ? '#C0605A' : daysRemaining(cycle.end_date) <= 7 ? '#8A7A30' : '#3E7A57',
+                        color: daysRemainingJakarta(cycle.end_date) <= 3 ? '#C0605A' : daysRemainingJakarta(cycle.end_date) <= 7 ? '#8A7A30' : '#3E7A57',
                       }}
                     >
                       hari lagi

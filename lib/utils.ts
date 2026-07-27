@@ -31,6 +31,18 @@ export function todayJakarta(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' })
 }
 
+/**
+ * Whole days remaining until (and including) `endDate`, anchored to today in
+ * Asia/Jakarta. Inclusive of the end day — a cycle is still active through its
+ * end_date — so today == endDate returns 1 and a past endDate returns 0.
+ * Date-only math keeps it independent of time-of-day and server timezone.
+ */
+export function daysRemainingJakarta(endDate: string): number {
+  const end = new Date(`${endDate.slice(0, 10)}T00:00:00Z`).getTime()
+  const today = new Date(`${todayJakarta()}T00:00:00Z`).getTime()
+  return Math.max(0, Math.floor((end - today) / 86400000) + 1)
+}
+
 export function formatDateShort(date: string | Date): string {
   return formatDate(date, 'dd/MM/yyyy')
 }

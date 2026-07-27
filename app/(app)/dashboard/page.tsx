@@ -51,6 +51,7 @@ import {
   transactionAmountColor,
   transactionAmountPrefix,
   todayJakarta,
+  daysRemainingJakarta,
 } from '@/lib/utils'
 import type {
   Account,
@@ -154,16 +155,6 @@ function accountTypeLabel(type: Account['type']): string {
   if (type === 'cash') return 'Tunai'
   if (type === 'bank') return 'Bank'
   return 'E-Wallet'
-}
-
-// ─── Days remaining helper ────────────────────────────────────────────────────
-function daysRemaining(endDate: string): number {
-  // Compare date-only values in UTC so the result is exact whole days and
-  // independent of server timezone; "today" is anchored to Asia/Jakarta.
-  const end = new Date(`${endDate.slice(0, 10)}T00:00:00Z`).getTime()
-  const today = new Date(`${todayJakarta()}T00:00:00Z`).getTime()
-  const diff = Math.ceil((end - today) / (1000 * 60 * 60 * 24))
-  return Math.max(0, diff)
 }
 
 // ─── Transaction type dot ─────────────────────────────────────────────────────
@@ -516,16 +507,16 @@ export default async function DashboardPage() {
                 className="flex-shrink-0 px-3 py-1.5 rounded-2xl text-center"
                 style={{
                   background:
-                    daysRemaining(cycle.end_date) <= 3
+                    daysRemainingJakarta(cycle.end_date) <= 3
                       ? 'rgba(242,168,168,0.35)'
-                      : daysRemaining(cycle.end_date) <= 7
+                      : daysRemainingJakarta(cycle.end_date) <= 7
                         ? 'rgba(245,230,163,0.45)'
                         : 'rgba(168,216,185,0.35)',
                   border: '1px solid',
                   borderColor:
-                    daysRemaining(cycle.end_date) <= 3
+                    daysRemainingJakarta(cycle.end_date) <= 3
                       ? 'rgba(242,168,168,0.5)'
-                      : daysRemaining(cycle.end_date) <= 7
+                      : daysRemainingJakarta(cycle.end_date) <= 7
                         ? 'rgba(245,230,163,0.6)'
                         : 'rgba(168,216,185,0.5)',
                 }}
@@ -535,22 +526,22 @@ export default async function DashboardPage() {
                   style={{
                     fontFamily: 'var(--font-nunito), sans-serif',
                     color:
-                      daysRemaining(cycle.end_date) <= 3
+                      daysRemainingJakarta(cycle.end_date) <= 3
                         ? '#C0605A'
-                        : daysRemaining(cycle.end_date) <= 7
+                        : daysRemainingJakarta(cycle.end_date) <= 7
                           ? '#8A7A30'
                           : '#3E7A57',
                   }}
                 >
-                  {daysRemaining(cycle.end_date)}
+                  {daysRemainingJakarta(cycle.end_date)}
                 </p>
                 <p
                   className="text-[10px] font-semibold uppercase tracking-wide"
                   style={{
                     color:
-                      daysRemaining(cycle.end_date) <= 3
+                      daysRemainingJakarta(cycle.end_date) <= 3
                         ? '#C0605A'
-                        : daysRemaining(cycle.end_date) <= 7
+                        : daysRemainingJakarta(cycle.end_date) <= 7
                           ? '#8A7A30'
                           : '#3E7A57',
                   }}
