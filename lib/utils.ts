@@ -51,10 +51,13 @@ export function getInitials(name: string): string {
   return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
 }
 
+// Returns a hex color (apply via inline `style.background`). Returning a hex
+// rather than a Tailwind class avoids the arbitrary-value class being dropped
+// when Tailwind's content scanner doesn't see the literal (lib/ isn't scanned).
 export function budgetProgressColor(pct: number): string {
-  if (pct >= 100) return 'bg-[#F2A8A8]'
-  if (pct >= 80) return 'bg-[#F5E6A3]'
-  return 'bg-[#A8D8B9]'
+  if (pct >= 100) return '#F2A8A8'
+  if (pct >= 80) return '#F5E6A3'
+  return '#A8D8B9'
 }
 
 export function transactionAmountColor(type: 'expense' | 'income' | 'transfer'): string {

@@ -891,8 +891,8 @@ export default async function DashboardPage() {
                   {/* Progress bar */}
                   <div className="h-2 rounded-full bg-[#F0EDE8] overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all ${budgetProgressColor(b.pct)}`}
-                      style={{ width: `${Math.min(b.pct, 100)}%` }}
+                      className="h-full rounded-full transition-all"
+                      style={{ width: `${Math.min(b.pct, 100)}%`, background: budgetProgressColor(b.pct) }}
                     />
                   </div>
                   <div className="flex items-center justify-between mt-1.5">

@@ -623,8 +623,8 @@ export default function BudgetPage() {
                   </div>
                   <div className="h-2.5 rounded-full overflow-hidden" style={{ background: '#F0EDE8' }}>
                     <div
-                      className={`h-full rounded-full transition-all duration-500 ${budgetProgressColor(overallPct)}`}
-                      style={{ width: `${Math.min(overallPct, 100)}%` }}
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min(overallPct, 100)}%`, background: budgetProgressColor(overallPct) }}
                     />
                   </div>
                 </>
@@ -731,8 +731,8 @@ export default function BudgetPage() {
 
                       <div className="h-2 rounded-full overflow-hidden mb-1.5" style={{ background: '#F0EDE8' }}>
                         <div
-                          className={`h-full rounded-full transition-all duration-500 ${budgetProgressColor(pct)}`}
-                          style={{ width: `${Math.min(pct, 100)}%` }}
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{ width: `${Math.min(pct, 100)}%`, background: budgetProgressColor(pct) }}
                         />
                       </div>
 
