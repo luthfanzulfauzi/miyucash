@@ -613,12 +613,17 @@ export default function BudgetPage() {
                       Sisa: {formatCurrency(Math.max(0, totalBudget - totalSpent))}
                     </span>
                     <span
-                      className="text-xs font-bold"
+                      className="text-xs font-bold flex items-baseline gap-1"
                       style={{
                         color: overallPct >= 100 ? '#C0605A' : overallPct >= 80 ? '#8A7A30' : '#3E7A57',
                       }}
                     >
                       {overallPct}%
+                      {totalSpent > totalBudget && (
+                        <span className="text-[10px] font-semibold" style={{ color: '#C0605A' }}>
+                          (over {formatCurrency(totalSpent - totalBudget)})
+                        </span>
+                      )}
                     </span>
                   </div>
                   <div className="h-2.5 rounded-full overflow-hidden" style={{ background: '#F0EDE8' }}>
