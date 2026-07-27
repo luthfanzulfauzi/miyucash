@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import {
   ArrowDownRight,
@@ -9,6 +9,7 @@ import {
   Search,
   SlidersHorizontal,
   X,
+  Loader2,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import {
@@ -19,12 +20,19 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { PixelCat } from '@/components/shared/pixel-cat'
-import type { TransactionWithRelations } from '@/types'
+import { createClient as _createClient } from '@/lib/supabase/client'
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const createClient = _createClient as unknown as () => any
+import { useTrackerStore } from '@/stores/tracker'
+import type { TransactionWithRelations, Cycle, Account, Category } from '@/types'
 import { formatCurrency, formatDate, transactionAmountColor, transactionAmountPrefix } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 
 interface TransactionListProps {
   transactions: TransactionWithRelations[]
+  cycles: Cycle[]
+  accounts: Pick<Account, 'id' | 'name' | 'type'>[]
+  categories: Pick<Category, 'id' | 'name' | 'type'>[]
 }
 
 type FilterType = 'all' | 'expense' | 'income' | 'transfer'
@@ -56,76 +64,128 @@ const TYPE_ICON_COLOR: Record<string, string> = {
 
 const ALL = 'all'
 
-export function TransactionList({ transactions }: TransactionListProps) {
+// Max rows fetched when a filter is active (2-user app — generous headroom).
+const FILTER_LIMIT = 1000
+
+const SELECT_QUERY = `
+  *,
+  account:accounts!account_id(id, name, type),
+  to_account:accounts!to_account_id(id, name, type),
+  category:categories(id, name, icon, color),
+  created_by_user:users(id, name, avatar_url)
+`
+
+export function TransactionList({ transactions, cycles, accounts, categories }: TransactionListProps) {
+  const { trackerId } = useTrackerStore()
+
   const [filter, setFilter] = useState<FilterType>('all')
   const [search, setSearch] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [accountFilter, setAccountFilter] = useState<string>(ALL)
   const [categoryFilter, setCategoryFilter] = useState<string>(ALL)
+  const [cycleFilter, setCycleFilter] = useState<string>(ALL)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
 
-  // Derive account & category options from the loaded transactions
-  const accountOptions = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const t of transactions) {
-      if (t.account) map.set(t.account.id, t.account.name)
-      if (t.to_account) map.set(t.to_account.id, t.to_account.name)
-    }
-    return Array.from(map, ([id, name]) => ({ id, name })).sort((a, b) =>
-      a.name.localeCompare(b.name),
-    )
-  }, [transactions])
+  // Server-side filtered results (covers ALL transactions, not just the default 50)
+  const [serverResults, setServerResults] = useState<TransactionWithRelations[] | null>(null)
+  const [serverLoading, setServerLoading] = useState(false)
+  const reqId = useRef(0)
 
-  const categoryOptions = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const t of transactions) {
-      if (t.category) map.set(t.category.id, t.category.name)
-    }
-    return Array.from(map, ([id, name]) => ({ id, name })).sort((a, b) =>
-      a.name.localeCompare(b.name),
-    )
-  }, [transactions])
+  // Any structured filter → query the server across all transactions
+  const hasStructuredFilter =
+    filter !== ALL ||
+    accountFilter !== ALL ||
+    categoryFilter !== ALL ||
+    cycleFilter !== ALL ||
+    !!dateFrom ||
+    !!dateTo
 
-  const activeCount =
+  const hasAnyFilter = hasStructuredFilter || search.trim() !== ''
+
+  const fetchFiltered = useCallback(async () => {
+    if (!trackerId) return
+    const myReq = ++reqId.current
+    setServerLoading(true)
+    try {
+      const supabase = createClient()
+      let q = supabase
+        .from('transactions')
+        .select(SELECT_QUERY)
+        .eq('tracker_id', trackerId)
+
+      if (filter !== ALL) q = q.eq('type', filter)
+      if (categoryFilter !== ALL) q = q.eq('category_id', categoryFilter)
+      if (accountFilter !== ALL) {
+        q = q.or(`account_id.eq.${accountFilter},to_account_id.eq.${accountFilter}`)
+      }
+
+      // Cycle + date range = intersection (AND). Take the tightest bounds.
+      const cyc = cycleFilter !== ALL ? cycles.find((c) => c.id === cycleFilter) : null
+      const lowers = [dateFrom, cyc?.start_date?.slice(0, 10)].filter(Boolean) as string[]
+      const uppers = [dateTo, cyc?.end_date?.slice(0, 10)].filter(Boolean) as string[]
+      const effStart = lowers.length ? lowers.reduce((a, b) => (a > b ? a : b)) : null
+      const effEnd = uppers.length ? uppers.reduce((a, b) => (a < b ? a : b)) : null
+      if (effStart) q = q.gte('date', effStart)
+      if (effEnd) q = q.lte('date', effEnd)
+
+      const { data } = await q
+        .order('date', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(FILTER_LIMIT)
+
+      // Ignore stale responses (a newer request already fired)
+      if (myReq === reqId.current) {
+        setServerResults((data as TransactionWithRelations[]) ?? [])
+      }
+    } finally {
+      if (myReq === reqId.current) setServerLoading(false)
+    }
+  }, [trackerId, filter, accountFilter, categoryFilter, cycleFilter, dateFrom, dateTo, cycles])
+
+  // Debounced server fetch whenever structured filters change
+  useEffect(() => {
+    if (!hasStructuredFilter) {
+      setServerResults(null)
+      setServerLoading(false)
+      reqId.current++ // invalidate any in-flight request
+      return
+    }
+    const t = setTimeout(fetchFiltered, 300)
+    return () => clearTimeout(t)
+  }, [hasStructuredFilter, fetchFiltered])
+
+  const clearFilters = () => {
+    setFilter('all')
+    setSearch('')
+    setAccountFilter(ALL)
+    setCategoryFilter(ALL)
+    setCycleFilter(ALL)
+    setDateFrom('')
+    setDateTo('')
+    setShowAdvanced(false)
+  }
+
+  const advancedCount =
     (accountFilter !== ALL ? 1 : 0) +
     (categoryFilter !== ALL ? 1 : 0) +
+    (cycleFilter !== ALL ? 1 : 0) +
     (dateFrom ? 1 : 0) +
     (dateTo ? 1 : 0)
 
-  const resetAdvanced = () => {
-    setAccountFilter(ALL)
-    setCategoryFilter(ALL)
-    setDateFrom('')
-    setDateTo('')
-  }
-
+  // Base dataset: server results when filtering, otherwise the default 50.
+  // Text search always applied client-side on top of the base dataset.
   const filtered = useMemo(() => {
-    return transactions.filter((t) => {
-      if (filter !== 'all' && t.type !== filter) return false
-
-      if (accountFilter !== ALL) {
-        const matchesAccount =
-          t.account?.id === accountFilter || t.to_account?.id === accountFilter
-        if (!matchesAccount) return false
-      }
-
-      if (categoryFilter !== ALL && t.category?.id !== categoryFilter) return false
-
-      const day = t.date.slice(0, 10)
-      if (dateFrom && day < dateFrom) return false
-      if (dateTo && day > dateTo) return false
-
-      if (search.trim()) {
-        const q = search.toLowerCase()
-        const noteMatch = t.note?.toLowerCase().includes(q) ?? false
-        const categoryMatch = t.category?.name.toLowerCase().includes(q) ?? false
-        const accountMatch = t.account?.name.toLowerCase().includes(q) ?? false
-        if (!noteMatch && !categoryMatch && !accountMatch) return false
-      }
-      return true
+    const baseData = hasStructuredFilter ? serverResults ?? [] : transactions
+    if (!search.trim()) return baseData
+    const q = search.toLowerCase()
+    return baseData.filter((t) => {
+      const noteMatch = t.note?.toLowerCase().includes(q) ?? false
+      const categoryMatch = t.category?.name.toLowerCase().includes(q) ?? false
+      const accountMatch = t.account?.name.toLowerCase().includes(q) ?? false
+      return noteMatch || categoryMatch || accountMatch
     })
-  }, [transactions, filter, search, accountFilter, categoryFilter, dateFrom, dateTo])
+  }, [hasStructuredFilter, serverResults, transactions, search])
 
   // Group by date
   const grouped = useMemo(() => {
@@ -137,6 +197,9 @@ export function TransactionList({ transactions }: TransactionListProps) {
     }
     return Array.from(map.entries())
   }, [filtered])
+
+  const showLoading = hasStructuredFilter && serverLoading && serverResults === null
+  const atCap = hasStructuredFilter && (serverResults?.length ?? 0) >= FILTER_LIMIT
 
   const selectTriggerStyle = {
     background: 'rgba(255,255,255,0.78)',
@@ -163,21 +226,21 @@ export function TransactionList({ transactions }: TransactionListProps) {
             aria-label="Filter lanjutan"
             className={cn(
               'relative flex-shrink-0 w-11 h-11 rounded-2xl flex items-center justify-center transition-all active:scale-95',
-              showAdvanced || activeCount > 0 ? 'text-[#3D4A5C] shadow-sm' : 'text-[#7A8899]',
+              showAdvanced || advancedCount > 0 ? 'text-[#3D4A5C] shadow-sm' : 'text-[#7A8899]',
             )}
             style={
-              showAdvanced || activeCount > 0
+              showAdvanced || advancedCount > 0
                 ? { background: '#B8D4E8' }
                 : { background: 'rgba(255,255,255,0.78)', backdropFilter: 'blur(12px)' }
             }
           >
             <SlidersHorizontal className="h-4 w-4 stroke-[2.2]" />
-            {activeCount > 0 && (
+            {advancedCount > 0 && (
               <span
                 className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-extrabold flex items-center justify-center text-white"
                 style={{ background: '#D97B7B' }}
               >
-                {activeCount}
+                {advancedCount}
               </span>
             )}
           </button>
@@ -211,17 +274,27 @@ export function TransactionList({ transactions }: TransactionListProps) {
             className="rounded-3xl p-4 space-y-3"
             style={{ background: 'rgba(255,255,255,0.60)', backdropFilter: 'blur(12px)' }}
           >
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-[#7A8899]">Filter lanjutan</span>
-              {activeCount > 0 && (
-                <button
-                  onClick={resetAdvanced}
-                  className="flex items-center gap-1 text-xs font-bold text-[#D97B7B] active:scale-95 transition-transform"
+            <span className="text-xs font-bold text-[#7A8899]">Filter lanjutan</span>
+
+            {/* Cycle */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-[#7A8899] px-1">Cycle</label>
+              <Select value={cycleFilter} onValueChange={setCycleFilter}>
+                <SelectTrigger
+                  className="rounded-2xl border-0 text-sm text-[#3D4A5C]"
+                  style={selectTriggerStyle}
                 >
-                  <X className="h-3.5 w-3.5 stroke-[2.5]" />
-                  Reset
-                </button>
-              )}
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>Semua cycle</SelectItem>
+                  {cycles.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Account */}
@@ -236,7 +309,7 @@ export function TransactionList({ transactions }: TransactionListProps) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={ALL}>Semua akun</SelectItem>
-                  {accountOptions.map((a) => (
+                  {accounts.map((a) => (
                     <SelectItem key={a.id} value={a.id}>
                       {a.name}
                     </SelectItem>
@@ -257,7 +330,7 @@ export function TransactionList({ transactions }: TransactionListProps) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={ALL}>Semua kategori</SelectItem>
-                  {categoryOptions.map((c) => (
+                  {categories.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
                       {c.name}
                     </SelectItem>
@@ -291,25 +364,57 @@ export function TransactionList({ transactions }: TransactionListProps) {
             </div>
           </div>
         )}
+
+        {/* Filter status bar */}
+        {hasAnyFilter && (
+          <div className="flex items-center justify-between px-1">
+            <span className="text-xs text-[#7A8899] font-medium flex items-center gap-1.5">
+              {serverLoading ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Memuat…
+                </>
+              ) : (
+                <>
+                  {filtered.length} hasil
+                  {hasStructuredFilter && <span className="text-[#9AAAB8]">· semua transaksi</span>}
+                </>
+              )}
+            </span>
+            <button
+              onClick={clearFilters}
+              className="flex items-center gap-1 text-xs font-bold text-[#D97B7B] active:scale-95 transition-transform"
+            >
+              <X className="h-3.5 w-3.5 stroke-[2.5]" />
+              Bersihkan filter
+            </button>
+          </div>
+        )}
       </div>
 
+      {/* Loading (first fetch) */}
+      {showLoading && (
+        <div className="flex flex-col items-center justify-center py-16 gap-3">
+          <Loader2 className="h-7 w-7 animate-spin text-[#B8D4E8]" />
+          <p className="text-xs text-[#9AAAB8]">Mencari transaksi…</p>
+        </div>
+      )}
+
       {/* Empty state */}
-      {grouped.length === 0 && (
+      {!showLoading && grouped.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 gap-4">
           <PixelCat size={72} />
           <div className="text-center">
             <p className="font-bold text-[#3D4A5C]" style={{ fontFamily: 'var(--font-nunito)' }}>
-              {transactions.length === 0
-                ? 'Belum ada transaksi'
-                : 'Tidak ada yang cocok'}
+              {hasAnyFilter ? 'Tidak ada yang cocok' : 'Belum ada transaksi'}
             </p>
             <p className="text-xs text-[#9AAAB8] mt-1">
-              {transactions.length === 0
-                ? 'Yuk catat transaksi pertamamu!'
-                : 'Coba ubah filter atau kata pencarian'}
+              {hasAnyFilter
+                ? 'Coba ubah atau bersihkan filter'
+                : 'Yuk catat transaksi pertamamu!'}
             </p>
           </div>
-          {transactions.length === 0 && (
+          {!hasAnyFilter && (
             <Link
               href="/transactions/new"
               className="mt-2 px-5 py-2.5 rounded-2xl text-sm font-bold text-[#3D4A5C] shadow-sm transition-all active:scale-95"
@@ -321,84 +426,95 @@ export function TransactionList({ transactions }: TransactionListProps) {
         </div>
       )}
 
-      {/* Grouped list */}
-      {grouped.map(([day, txns]) => (
-        <div key={day} className="space-y-2">
-          {/* Date separator */}
-          <div className="flex items-center gap-2 px-1">
-            <span className="text-xs font-bold text-[#7A8899]">{formatDate(day)}</span>
-            <div className="flex-1 h-px" style={{ background: 'rgba(184,212,232,0.35)' }} />
-            <span className="text-xs text-[#9AAAB8] font-medium">
-              {txns.length} transaksi
-            </span>
-          </div>
-
-          {/* Cards */}
-          <div
-            className="rounded-3xl overflow-hidden divide-y divide-[rgba(184,212,232,0.25)]"
-            style={{
-              background: 'rgba(255,255,255,0.78)',
-              backdropFilter: 'blur(12px)',
-            }}
-          >
-            {txns.map((t) => {
-              const Icon = TYPE_ICON[t.type]
-              const label = t.type === 'transfer'
-                ? 'Transfer'
-                : t.category?.name ?? (t.type === 'expense' ? 'Pengeluaran' : 'Pemasukan')
-              const accountLabel =
-                t.type === 'transfer'
-                  ? `${t.account?.name ?? '—'} → ${t.to_account?.name ?? '—'}`
-                  : t.account?.name ?? '—'
-
-              return (
-                <Link
-                  key={t.id}
-                  href={`/transactions/${t.id}`}
-                  className="flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-white/40 active:bg-white/60"
-                >
-                  {/* Icon circle */}
-                  <div
-                    className="flex-shrink-0 w-10 h-10 rounded-2xl flex items-center justify-center"
-                    style={{ background: TYPE_BG[t.type] }}
-                  >
-                    <Icon
-                      className="h-5 w-5 stroke-[2]"
-                      style={{ color: TYPE_ICON_COLOR[t.type] }}
-                    />
-                  </div>
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-[#3D4A5C] truncate leading-tight">
-                      {label}
-                    </p>
-                    <p className="text-xs text-[#9AAAB8] truncate mt-0.5">{accountLabel}</p>
-                    {t.note && (
-                      <p className="text-xs text-[#7A8899] truncate mt-0.5 italic">
-                        {t.note}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Amount */}
-                  <div className="text-right flex-shrink-0">
-                    <p
-                      className={cn(
-                        'text-sm font-bold tabular-nums',
-                        transactionAmountColor(t.type),
-                      )}
-                    >
-                      {transactionAmountPrefix(t.type)}
-                      {formatCurrency(t.amount)}
-                    </p>
-                  </div>
-                </Link>
-              )
-            })}
-          </div>
+      {/* At-cap notice */}
+      {atCap && (
+        <div
+          className="rounded-2xl px-3 py-2 text-xs text-[#8A7A30]"
+          style={{ background: 'rgba(245,230,163,0.2)' }}
+        >
+          Menampilkan {FILTER_LIMIT} transaksi terbaru yang cocok. Persempit rentang tanggal untuk hasil lebih spesifik.
         </div>
-      ))}
+      )}
+
+      {/* Grouped list */}
+      {!showLoading &&
+        grouped.map(([day, txns]) => (
+          <div key={day} className="space-y-2">
+            {/* Date separator */}
+            <div className="flex items-center gap-2 px-1">
+              <span className="text-xs font-bold text-[#7A8899]">{formatDate(day)}</span>
+              <div className="flex-1 h-px" style={{ background: 'rgba(184,212,232,0.35)' }} />
+              <span className="text-xs text-[#9AAAB8] font-medium">
+                {txns.length} transaksi
+              </span>
+            </div>
+
+            {/* Cards */}
+            <div
+              className="rounded-3xl overflow-hidden divide-y divide-[rgba(184,212,232,0.25)]"
+              style={{
+                background: 'rgba(255,255,255,0.78)',
+                backdropFilter: 'blur(12px)',
+              }}
+            >
+              {txns.map((t) => {
+                const Icon = TYPE_ICON[t.type]
+                const label = t.type === 'transfer'
+                  ? 'Transfer'
+                  : t.category?.name ?? (t.type === 'expense' ? 'Pengeluaran' : 'Pemasukan')
+                const accountLabel =
+                  t.type === 'transfer'
+                    ? `${t.account?.name ?? '—'} → ${t.to_account?.name ?? '—'}`
+                    : t.account?.name ?? '—'
+
+                return (
+                  <Link
+                    key={t.id}
+                    href={`/transactions/${t.id}`}
+                    className="flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-white/40 active:bg-white/60"
+                  >
+                    {/* Icon circle */}
+                    <div
+                      className="flex-shrink-0 w-10 h-10 rounded-2xl flex items-center justify-center"
+                      style={{ background: TYPE_BG[t.type] }}
+                    >
+                      <Icon
+                        className="h-5 w-5 stroke-[2]"
+                        style={{ color: TYPE_ICON_COLOR[t.type] }}
+                      />
+                    </div>
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-[#3D4A5C] truncate leading-tight">
+                        {label}
+                      </p>
+                      <p className="text-xs text-[#9AAAB8] truncate mt-0.5">{accountLabel}</p>
+                      {t.note && (
+                        <p className="text-xs text-[#7A8899] truncate mt-0.5 italic">
+                          {t.note}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Amount */}
+                    <div className="text-right flex-shrink-0">
+                      <p
+                        className={cn(
+                          'text-sm font-bold tabular-nums',
+                          transactionAmountColor(t.type),
+                        )}
+                      >
+                        {transactionAmountPrefix(t.type)}
+                        {formatCurrency(t.amount)}
+                      </p>
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+        ))}
     </div>
   )
 }

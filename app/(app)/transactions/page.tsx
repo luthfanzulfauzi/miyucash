@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import { createClient, getActiveTrackerId } from '@/lib/supabase/server'
-import type { TransactionWithRelations, Cycle } from '@/types'
+import type { TransactionWithRelations, Cycle, Account, Category } from '@/types'
 import { TransactionList } from './transaction-list'
 import { TransactionsExportButton } from './transactions-export-button'
 
@@ -13,27 +13,38 @@ export default async function TransactionsPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = supabase as any
 
-  // Fetch transactions + all cycles (for export scope selector)
-  const [{ data: transactions }, { data: cycles }] = await Promise.all([
-    db
-      .from('transactions')
-      .select(`
-        *,
-        account:accounts!account_id(id, name, type),
-        to_account:accounts!to_account_id(id, name, type),
-        category:categories(id, name, icon, color),
-        created_by_user:users(id, name, avatar_url)
-      `)
-      .eq('tracker_id', trackerId)
-      .order('date', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(50),
-    db
-      .from('cycles')
-      .select('*')
-      .eq('tracker_id', trackerId)
-      .order('start_date', { ascending: false }),
-  ])
+  // Default 50 transactions + full cycles/accounts/categories lists (for filter options)
+  const [{ data: transactions }, { data: cycles }, { data: accounts }, { data: categories }] =
+    await Promise.all([
+      db
+        .from('transactions')
+        .select(`
+          *,
+          account:accounts!account_id(id, name, type),
+          to_account:accounts!to_account_id(id, name, type),
+          category:categories(id, name, icon, color),
+          created_by_user:users(id, name, avatar_url)
+        `)
+        .eq('tracker_id', trackerId)
+        .order('date', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(50),
+      db
+        .from('cycles')
+        .select('*')
+        .eq('tracker_id', trackerId)
+        .order('start_date', { ascending: false }),
+      db
+        .from('accounts')
+        .select('id, name, type')
+        .eq('tracker_id', trackerId)
+        .order('name', { ascending: true }),
+      db
+        .from('categories')
+        .select('id, name, type')
+        .eq('tracker_id', trackerId)
+        .order('name', { ascending: true }),
+    ])
 
   return (
     <div className="min-h-screen" style={{ background: '#F5F0E8' }}>
@@ -73,7 +84,12 @@ export default async function TransactionsPage() {
 
       {/* Transaction list with filters */}
       <div className="px-4 pb-6">
-        <TransactionList transactions={(transactions as TransactionWithRelations[]) ?? []} />
+        <TransactionList
+          transactions={(transactions as TransactionWithRelations[]) ?? []}
+          cycles={(cycles as Cycle[]) ?? []}
+          accounts={(accounts as Pick<Account, 'id' | 'name' | 'type'>[]) ?? []}
+          categories={(categories as Pick<Category, 'id' | 'name' | 'type'>[]) ?? []}
+        />
       </div>
     </div>
   )
