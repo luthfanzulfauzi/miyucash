@@ -17,6 +17,7 @@ import { createClient as _createClient } from '@/lib/supabase/client'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const createClient = _createClient as unknown as () => any
 import { useTrackerStore } from '@/stores/tracker'
+import { todayJakarta } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -58,14 +59,14 @@ export default function NewCyclePage() {
   const [hasPreviousBudgets, setHasPreviousBudgets] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
-  const today = new Date()
-  const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
-  const lastOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+  const [jkYear, jkMonth] = todayJakarta().split('-').map(Number)
+  const firstOfMonth = new Date(jkYear, jkMonth - 1, 1)
+  const lastOfMonth = new Date(jkYear, jkMonth, 0)
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      name: `${today.toLocaleString('id-ID', { month: 'long', year: 'numeric' })}`,
+      name: `${firstOfMonth.toLocaleString('id-ID', { month: 'long', year: 'numeric' })}`,
       start_date: formatLocalDate(firstOfMonth),
       end_date: formatLocalDate(lastOfMonth),
       copyBudgets: false,
@@ -124,7 +125,13 @@ export default function NewCyclePage() {
         .single()
 
       if (cycleError || !newCycle) {
-        toast.error((cycleError as { message?: string } | null)?.message ?? 'Gagal membuat cycle.')
+        const msg = String((cycleError as { message?: string } | null)?.message ?? '')
+        const code = (cycleError as { code?: string } | null)?.code
+        if (code === '23P01' || msg.includes('cycles_no_overlap')) {
+          toast.error('Rentang tanggal bertabrakan dengan cycle lain. Pilih rentang yang tidak overlap.')
+        } else {
+          toast.error(msg || 'Gagal membuat cycle.')
+        }
         return
       }
 

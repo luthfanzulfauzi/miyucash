@@ -12,6 +12,7 @@ import {
   PiggyBank,
   Download,
   Pencil,
+  AlertTriangle,
 } from 'lucide-react'
 import { createClient as _createClient } from '@/lib/supabase/client'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -79,13 +80,24 @@ export default function CyclesPage() {
       const supabase = createClient()
       const { data: updated, error } = await supabase
         .from('cycles')
-        .update({ name: editName.trim(), start_date: editStart, end_date: editEnd })
+        .update({
+          name: editName.trim(),
+          start_date: editStart,
+          end_date: editEnd,
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', editCycle.id)
         .select()
         .single()
 
       if (error || !updated) {
-        toast.error((error as { message?: string } | null)?.message ?? 'Gagal menyimpan perubahan.')
+        const msg = String((error as { message?: string } | null)?.message ?? '')
+        const code = (error as { code?: string } | null)?.code
+        if (code === '23P01' || msg.includes('cycles_no_overlap')) {
+          toast.error('Rentang tanggal bertabrakan dengan cycle lain. Pilih rentang yang tidak overlap.')
+        } else {
+          toast.error(msg || 'Gagal menyimpan perubahan.')
+        }
         return
       }
 
@@ -513,6 +525,21 @@ export default function CyclesPage() {
                 className="rounded-xl border-[#B8D4E8]/50 bg-white/70 focus-visible:ring-[#B8D4E8] h-11 text-[#3D4A5C] font-semibold"
               />
             </div>
+
+            {/* Retroactive-edit warning: dates changed from the saved cycle */}
+            {editCycle &&
+              (editStart !== editCycle.start_date.slice(0, 10) ||
+                editEnd !== editCycle.end_date.slice(0, 10)) && (
+                <div
+                  className="rounded-2xl px-3 py-2.5 flex items-start gap-2"
+                  style={{ background: 'rgba(245,230,163,0.25)', border: '1px solid rgba(245,230,163,0.5)' }}
+                >
+                  <AlertTriangle className="h-4 w-4 text-[#8A7A30] flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-[#8A7A30] leading-relaxed">
+                    Mengubah tanggal akan mengubah transaksi mana yang dihitung di budget cycle ini.
+                  </p>
+                </div>
+              )}
 
             <div className="flex gap-2 pt-2">
               <Button

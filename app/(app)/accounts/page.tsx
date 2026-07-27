@@ -5,45 +5,34 @@ import type { AccountWithBalance } from '@/types'
 import type { Database } from '@/types/supabase'
 
 type AccountRow = Database['public']['Tables']['accounts']['Row']
-type TxnRow = Pick<Database['public']['Tables']['transactions']['Row'], 'type' | 'amount' | 'account_id' | 'to_account_id'>
 
 export const metadata = { title: 'Akun Keuangan' }
-
-function computeBalance(
-  account: { id: string; initial_balance: number },
-  transactions: { type: string; amount: number; account_id: string; to_account_id: string | null }[]
-): number {
-  let balance = Number(account.initial_balance)
-  for (const t of transactions) {
-    if (t.type === 'income' && t.account_id === account.id) balance += Number(t.amount)
-    if (t.type === 'expense' && t.account_id === account.id) balance -= Number(t.amount)
-    if (t.type === 'transfer' && t.account_id === account.id) balance -= Number(t.amount)
-    if (t.type === 'transfer' && t.to_account_id === account.id) balance += Number(t.amount)
-  }
-  return balance
-}
 
 export default async function AccountsPage() {
   const [supabase, trackerId] = await Promise.all([createClient(), getActiveTrackerId()])
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  // Fetch accounts and all transactions in parallel
-  const [{ data: accounts }, { data: transactions }] = await Promise.all([
+  // Balances are aggregated in SQL (RPC) so they are never truncated by
+  // PostgREST's max_rows, no matter how many transactions the tracker has.
+  const [{ data: accounts }, { data: balances }] = await Promise.all([
     supabase
       .from('accounts')
       .select('*')
       .eq('tracker_id', trackerId)
       .order('created_at', { ascending: true }),
-    supabase
-      .from('transactions')
-      .select('type, amount, account_id, to_account_id')
-      .eq('tracker_id', trackerId),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any).rpc('get_account_balances', { p_tracker_id: trackerId }),
   ])
+
+  const balanceMap = new Map<string, number>(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((balances as any[]) ?? []).map((b) => [b.acct_id as string, Number(b.balance)]),
+  )
 
   const accountsWithBalance: AccountWithBalance[] = ((accounts ?? []) as AccountRow[]).map((a) => ({
     ...a,
-    current_balance: computeBalance(a, (transactions ?? []) as TxnRow[]),
+    current_balance: balanceMap.get(a.id) ?? Number(a.initial_balance),
   }))
 
   return (

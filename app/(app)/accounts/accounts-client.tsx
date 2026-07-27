@@ -25,7 +25,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import type { Account, AccountWithBalance } from '@/types'
+import type { AccountWithBalance } from '@/types'
 import type { Database } from '@/types/supabase'
 
 type AccountRow = Database['public']['Tables']['accounts']['Row']
@@ -69,20 +69,6 @@ const ACCOUNT_TYPE_CONFIG = {
     text: '#3D1A6B',
   },
 } as const
-
-function computeBalance(
-  account: Account,
-  transactions: { type: string; amount: number; account_id: string; to_account_id: string | null }[]
-): number {
-  let balance = Number(account.initial_balance)
-  for (const t of transactions) {
-    if (t.type === 'income' && t.account_id === account.id) balance += Number(t.amount)
-    if (t.type === 'expense' && t.account_id === account.id) balance -= Number(t.amount)
-    if (t.type === 'transfer' && t.account_id === account.id) balance -= Number(t.amount)
-    if (t.type === 'transfer' && t.to_account_id === account.id) balance += Number(t.amount)
-  }
-  return balance
-}
 
 // ─── Delete Confirm Dialog ────────────────────────────────────────────────────
 
@@ -458,15 +444,20 @@ export function AccountsClient({
 
   const refetch = useCallback(async () => {
     const supabase = createClient()
-    const [{ data: accs }, { data: txns }] = await Promise.all([
+    const [{ data: accs }, { data: balances }] = await Promise.all([
       supabase.from('accounts').select('*').eq('tracker_id', trackerId).order('created_at', { ascending: true }),
-      supabase.from('transactions').select('type, amount, account_id, to_account_id').eq('tracker_id', trackerId),
+      // Balances aggregated in SQL (RPC) — not subject to max_rows truncation.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (supabase as any).rpc('get_account_balances', { p_tracker_id: trackerId }),
     ])
     if (accs) {
-      const rows = accs as AccountRow[]
-      const withBalance: AccountWithBalance[] = rows.map((a) => ({
+      const balanceMap = new Map<string, number>(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ((balances as any[]) ?? []).map((b) => [b.acct_id as string, Number(b.balance)]),
+      )
+      const withBalance: AccountWithBalance[] = (accs as AccountRow[]).map((a) => ({
         ...a,
-        current_balance: computeBalance(a, txns ?? []),
+        current_balance: balanceMap.get(a.id) ?? Number(a.initial_balance),
       }))
       setAccounts(withBalance)
     }

@@ -10,6 +10,7 @@ import Link from 'next/link'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { useTrackerStore } from '@/stores/tracker'
+import { todayJakarta } from '@/lib/utils'
 import type { Account, Category } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -75,7 +76,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
 
 // --- Today helper ---
 function todayStr() {
-  return new Date().toISOString().slice(0, 10)
+  return todayJakarta()
 }
 
 // --- Amount input with thousand separators ---

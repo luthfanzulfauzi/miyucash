@@ -50,6 +50,7 @@ import {
   budgetProgressColor,
   transactionAmountColor,
   transactionAmountPrefix,
+  todayJakarta,
 } from '@/lib/utils'
 import type {
   Account,
@@ -157,10 +158,11 @@ function accountTypeLabel(type: Account['type']): string {
 
 // ─── Days remaining helper ────────────────────────────────────────────────────
 function daysRemaining(endDate: string): number {
-  const end = new Date(endDate)
-  const now = new Date()
-  end.setHours(23, 59, 59, 999)
-  const diff = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+  // Compare date-only values in UTC so the result is exact whole days and
+  // independent of server timezone; "today" is anchored to Asia/Jakarta.
+  const end = new Date(`${endDate.slice(0, 10)}T00:00:00Z`).getTime()
+  const today = new Date(`${todayJakarta()}T00:00:00Z`).getTime()
+  const diff = Math.ceil((end - today) / (1000 * 60 * 60 * 24))
   return Math.max(0, diff)
 }
 
@@ -426,50 +428,23 @@ export default async function DashboardPage() {
     }
   }
 
-  // Step 4: Account balances
-  // Balance = initial_balance + SUM(income) - SUM(expense) + SUM(transfer_in) - SUM(transfer_out)
-  type AmountRow = { amount: number }
-  const accountsWithBalance: AccountWithBalance[] = await Promise.all(
-    accounts.map(async (acc) => {
-      const { data: incomeData } = await supabase
-        .from('transactions')
-        .select('amount')
-        .eq('account_id', acc.id)
-        .eq('type', 'income')
-
-      const { data: expenseData } = await supabase
-        .from('transactions')
-        .select('amount')
-        .eq('account_id', acc.id)
-        .eq('type', 'expense')
-
-      const { data: transferInData } = await supabase
-        .from('transactions')
-        .select('amount')
-        .eq('to_account_id', acc.id)
-        .eq('type', 'transfer')
-
-      const { data: transferOutData } = await supabase
-        .from('transactions')
-        .select('amount')
-        .eq('account_id', acc.id)
-        .eq('type', 'transfer')
-
-      const income = ((incomeData as AmountRow[] | null) ?? []).reduce((s, r) => s + r.amount, 0)
-      const expense = ((expenseData as AmountRow[] | null) ?? []).reduce((s, r) => s + r.amount, 0)
-      const transferIn = ((transferInData as AmountRow[] | null) ?? []).reduce((s, r) => s + r.amount, 0)
-      const transferOut = ((transferOutData as AmountRow[] | null) ?? []).reduce((s, r) => s + r.amount, 0)
-
-      return {
-        ...acc,
-        current_balance: acc.initial_balance + income - expense + transferIn - transferOut,
-      }
-    }),
+  // Step 4: Account balances — aggregated in SQL (RPC) so they are never
+  // truncated by PostgREST's max_rows regardless of transaction count.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: balanceRows } = await (supabase as any).rpc('get_account_balances', {
+    p_tracker_id: trackerId,
+  })
+  const balanceMap = new Map<string, number>(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((balanceRows as any[]) ?? []).map((b) => [b.acct_id as string, Number(b.balance)]),
   )
+  const accountsWithBalance: AccountWithBalance[] = accounts.map((acc) => ({
+    ...acc,
+    current_balance: balanceMap.get(acc.id) ?? Number(acc.initial_balance),
+  }))
 
   const userName = profile?.name ?? authUser.email?.split('@')[0] ?? 'Kamu'
   const trackerName = trackerData?.name ?? 'Tracker'
-  const today = new Date()
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
@@ -485,7 +460,7 @@ export default async function DashboardPage() {
             Hai, {userName}! 👋
           </h1>
           <p className="text-sm text-[#7A8899] mt-0.5">
-            {formatDate(today.toISOString(), 'EEEE, dd MMMM yyyy')}
+            {formatDate(todayJakarta(), 'EEEE, dd MMMM yyyy')}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0 mt-1">

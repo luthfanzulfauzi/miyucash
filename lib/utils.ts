@@ -21,6 +21,16 @@ export function formatDate(date: string | Date, fmt = 'dd MMM yyyy'): string {
   return format(d, fmt, { locale: id })
 }
 
+/**
+ * Today's date in Asia/Jakarta (WIB), as a `YYYY-MM-DD` string.
+ * Use this for any "today" default instead of `new Date().toISOString()`,
+ * which returns the UTC date and is a day behind for 00:00–06:59 WIB
+ * (and always UTC on server components running on Vercel).
+ */
+export function todayJakarta(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' })
+}
+
 export function formatDateShort(date: string | Date): string {
   return formatDate(date, 'dd/MM/yyyy')
 }
